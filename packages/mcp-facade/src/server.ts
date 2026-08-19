@@ -1,3 +1,4 @@
+import { AntigravityAgentHandle } from "@occ/adapter-antigravity";
 import { CodexAgentHandle } from "@occ/adapter-codex";
 import { CursorAgentHandle } from "@occ/adapter-cursor";
 import { GrokAgentHandle } from "@occ/adapter-grok";
@@ -6,6 +7,7 @@ import { FastMCP } from "@prefecthq/fastmcp-ts/server";
 import { z } from "zod";
 import { formatDelegationMarkdown } from "./format.js";
 import {
+  DELEGATE_TO_ANTIGRAVITY_DESCRIPTION,
   DELEGATE_TO_CODEX_DESCRIPTION,
   DELEGATE_TO_CURSOR_DESCRIPTION,
   DELEGATE_TO_GROK_DESCRIPTION,
@@ -86,12 +88,29 @@ const grokDelegateInput = {
     ),
 };
 
+const antigravityDelegateInput = {
+  ...sharedDelegateInput,
+  model: z
+    .string()
+    .optional()
+    .describe(
+      "agy --model slug from `agy models`. e.g. gemini-3.7-flash-high, gemini-3.5-flash-medium, gemini-3.1-pro-high, claude-sonnet-4-6. Unknown slug is a hard ERROR. Not a Codex or Grok slug.",
+    ),
+  effort: z
+    .enum(["low", "medium", "high", "xhigh", "max"])
+    .optional()
+    .describe(
+      "Reasoning effort → agy --effort (low|medium|high). OCC xhigh/max map to high.",
+    ),
+};
+
 export function createDefaultDeps(): OccServerDeps {
   const registry = new AgentRegistry();
   const store = new InMemoryTaskStore();
   registry.register(new CodexAgentHandle(store));
   registry.register(new CursorAgentHandle(store));
   registry.register(new GrokAgentHandle(store));
+  registry.register(new AntigravityAgentHandle(store));
   return { registry, store };
 }
 
@@ -105,7 +124,7 @@ export function createOccServer(deps: OccServerDeps = createDefaultDeps()): Fast
     {
       name: "occ_health",
       description:
-        "Check whether OCC can see registered agent CLIs (Codex, Cursor, Grok). Call this before delegating.",
+        "Check whether OCC can see registered agent CLIs (Codex, Cursor, Grok, Antigravity). Call this before delegating.",
       input: z.object({}),
     },
     async () => runHealth(deps.registry),
@@ -143,6 +162,18 @@ export function createOccServer(deps: OccServerDeps = createDefaultDeps()): Fast
     },
     async (input) => {
       const result = await runDelegate(deps.registry, deps.store, "grok", input);
+      return { ...result, markdown: formatDelegationMarkdown(result) };
+    },
+  );
+
+  server.tool(
+    {
+      name: "delegate_to_antigravity",
+      description: DELEGATE_TO_ANTIGRAVITY_DESCRIPTION,
+      input: z.object(antigravityDelegateInput),
+    },
+    async (input) => {
+      const result = await runDelegate(deps.registry, deps.store, "antigravity", input);
       return { ...result, markdown: formatDelegationMarkdown(result) };
     },
   );

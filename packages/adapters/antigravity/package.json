@@ -1,13 +1,10 @@
 {
-  "name": "@occ/mcp-facade",
+  "name": "@occ/adapter-antigravity",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "bin": {
-    "occ-mcp": "./dist/stdio.js"
-  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -18,19 +15,13 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run",
-    "start": "node dist/stdio.js"
+    "test": "vitest run"
   },
   "engines": {
     "node": ">=22"
   },
   "dependencies": {
-    "@occ/adapter-antigravity": "workspace:*",
-    "@occ/adapter-codex": "workspace:*",
-    "@occ/adapter-cursor": "workspace:*",
-    "@occ/adapter-grok": "workspace:*",
-    "@occ/core": "workspace:*",
-    "@prefecthq/fastmcp-ts": "^1.5.1",
-    "zod": "^4.4.3"
+    "@occ/adapter-kit": "workspace:*",
+    "@occ/core": "workspace:*"
   }
 }

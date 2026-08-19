@@ -17,7 +17,7 @@ The internal contract is an **AgentHandle**. MCP, ACP and A2A are façades over 
 
 ## Current Status
 
-IP-001, IP-002, and IP-003 are implemented: `@occ/core`, `@occ/adapter-kit`, `@occ/adapter-codex` (`codex exec --json`), `@occ/adapter-cursor` (`cursor-agent -p` — never `agent`, which is Grok on some PATHs), `@occ/adapter-grok` (`grok -p --output-format json` — never `agent` as a Cursor binary), and `@occ/mcp-facade` (`occ_health`, `delegate_to_codex`, `delegate_to_cursor`, `delegate_to_grok`). ACP, A2A, and the control-plane daemon are not built.
+IP-001 through IP-004 are implemented: `@occ/core`, `@occ/adapter-kit`, `@occ/adapter-codex` (`codex exec --json`), `@occ/adapter-cursor` (`cursor-agent -p` — never `agent`, which is Grok on some PATHs), `@occ/adapter-grok` (`grok -p --output-format json`), `@occ/adapter-antigravity` (`agy -p --output-format json` — never `gemini`), and `@occ/mcp-facade` (`occ_health`, `delegate_to_codex`, `delegate_to_cursor`, `delegate_to_grok`, `delegate_to_antigravity`). ACP, A2A, and the control-plane daemon are not built.
 
 Plans live in `docs/`. Study copies of protocol repos live beside this git repo at `../vendored` (gitignored here). Do not add them as a runtime dependency.
 
@@ -49,7 +49,8 @@ packages/
   adapters/codex/       # Codex CLI adapter
   adapters/cursor/      # cursor-agent -p (not `agent`; not ACP)
   adapters/grok/        # grok -p (not ACP; native X/web/Imagine stay in the brief)
-  mcp-facade/           # FastMCP tools (delegate_to_codex, delegate_to_cursor, delegate_to_grok)
+  adapters/antigravity/ # agy -p (not gemini CLI; web tools stay in the brief)
+  mcp-facade/           # FastMCP tools (delegate_to_*)
 ```
 
 Planned, do not invent early:
@@ -109,7 +110,7 @@ When deciding what to implement or improve:
 
 Claude Code (or any MCP client) can:
 
-1. Call a tool such as `delegate_to_codex`, `delegate_to_cursor`, or `delegate_to_grok` with a clear brief.
+1. Call a tool such as `delegate_to_codex`, `delegate_to_cursor`, `delegate_to_grok`, or `delegate_to_antigravity` with a clear brief.
 2. The corresponding agent runs (via the adapter).
 3. A structured result (or useful summary + diff) is returned.
 4. Claude can review and continue.

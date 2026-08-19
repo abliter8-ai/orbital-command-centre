@@ -57,5 +57,22 @@ describe("createOccServer in-process", () => {
       brief: "use grok",
     });
     expect(JSON.stringify(grokResult)).toMatch(/grok canned/);
+
+    const agy = new FakeAgentHandle({
+      agentId: "antigravity",
+      summary: "agy canned",
+      output: "agy canned",
+    });
+    const four = new AgentRegistry();
+    four.register(handle);
+    four.register(cursor);
+    four.register(grok);
+    four.register(agy);
+    const quad = createOccServer({ registry: four, store: new InMemoryTaskStore() });
+    const quadClient = await Client.connect(quad);
+    const agyResult = await quadClient.callTool("delegate_to_antigravity", {
+      brief: "use agy",
+    });
+    expect(JSON.stringify(agyResult)).toMatch(/agy canned/);
   });
 });
