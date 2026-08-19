@@ -16,8 +16,8 @@ export interface FakePromptCall {
 }
 
 export class FakeAgentHandle implements AgentHandle {
-  readonly agentId: AgentId = "codex";
-  readonly displayName = "Fake Codex";
+  readonly agentId: AgentId;
+  readonly displayName: string;
 
   readonly prompts: FakePromptCall[] = [];
   cancelledTaskIds: string[] = [];
@@ -28,17 +28,19 @@ export class FakeAgentHandle implements AgentHandle {
   canned: DelegationResult;
 
   constructor(overrides: Partial<DelegationResult> = {}) {
+    this.agentId = overrides.agentId ?? "codex";
+    this.displayName = this.agentId === "cursor" ? "Fake Cursor" : "Fake Codex";
     this.canned = {
       taskId: newTaskId(),
       sessionId: "fake-session",
-      agentId: "codex",
       status: "succeeded",
       cwd: "/tmp/occ-fake",
-      summary: "Fake Codex completed the brief.",
-      output: "Fake Codex completed the brief.",
+      summary: `${this.displayName} completed the brief.`,
+      output: `${this.displayName} completed the brief.`,
       filesChanged: [],
       durationMs: 12,
       ...overrides,
+      agentId: this.agentId,
     };
   }
 

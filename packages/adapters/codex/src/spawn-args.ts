@@ -2,8 +2,7 @@ import { isPendingSessionId } from "@occ/core";
 import type { SandboxMode } from "@occ/core";
 
 export const DEFAULT_SANDBOX: SandboxMode = "workspace-write";
-export const DEFAULT_TIMEOUT_MS = 600_000;
-export const MAX_TIMEOUT_MS = 1_800_000;
+export { DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS } from "@occ/adapter-kit";
 
 export interface CodexExecArgOptions {
   cwd: string;

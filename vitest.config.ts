@@ -7,7 +7,9 @@ export default defineConfig({
   resolve: {
     alias: {
       "@occ/core": `${root}packages/core/src/index.ts`,
+      "@occ/adapter-kit": `${root}packages/adapters/kit/src/index.ts`,
       "@occ/adapter-codex": `${root}packages/adapters/codex/src/index.ts`,
+      "@occ/adapter-cursor": `${root}packages/adapters/cursor/src/index.ts`,
     },
   },
   test: {

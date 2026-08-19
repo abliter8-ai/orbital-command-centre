@@ -17,7 +17,7 @@ The internal contract is an **AgentHandle**. MCP, ACP and A2A are façades over 
 
 ## Current Status
 
-IP-001 is implemented: `@occ/core`, `@occ/adapter-codex` (`codex exec --json`), and `@occ/mcp-facade` (`occ_health`, `delegate_to_codex`). ACP, A2A, and the control-plane daemon are not built.
+IP-001 and IP-002 are implemented: `@occ/core`, `@occ/adapter-kit`, `@occ/adapter-codex` (`codex exec --json`), `@occ/adapter-cursor` (`agent -p`), and `@occ/mcp-facade` (`occ_health`, `delegate_to_codex`, `delegate_to_cursor`). ACP, A2A, and the control-plane daemon are not built.
 
 Plans live in `docs/`. Study copies of protocol repos live beside this git repo at `../vendored` (gitignored here). Do not add them as a runtime dependency.
 
@@ -45,8 +45,10 @@ Present:
 ```
 packages/
   core/                 # AgentHandle, Task/Session model, types, registry
+  adapters/kit/         # shared spawn / cwd (no protocol types)
   adapters/codex/       # Codex CLI adapter
-  mcp-facade/           # FastMCP tools (delegate_to_codex)
+  adapters/cursor/      # Cursor agent CLI (headless -p, not ACP)
+  mcp-facade/           # FastMCP tools (delegate_to_codex, delegate_to_cursor)
 ```
 
 Planned, do not invent early:

@@ -4,7 +4,7 @@ import {
   InMemoryTaskStore,
 } from "@occ/core";
 import { describe, expect, it } from "vitest";
-import { runDelegateToCodex, runHealth } from "../src/tools.js";
+import { runDelegate, runDelegateToCodex, runHealth } from "../src/tools.js";
 
 function deps(handle = new FakeAgentHandle()) {
   const registry = new AgentRegistry();
@@ -35,6 +35,15 @@ describe("runHealth / runDelegateToCodex", () => {
     expect(handle.prompts[0]?.request.brief).toBe("implement X with tests");
     expect(handle.prompts[0]?.request.sandbox).toBe("read-only");
     expect(store.get(result.taskId)?.status).toBe("succeeded");
+  });
+
+  it("delegates to an injected cursor handle", async () => {
+    const { registry, store } = deps(new FakeAgentHandle({ agentId: "cursor" }));
+    const result = await runDelegate(registry, store, "cursor", {
+      brief: "edit via cursor",
+    });
+    expect(result.agentId).toBe("cursor");
+    expect(result.status).toBe("succeeded");
   });
 
   it("fails fast when the handle is unavailable", async () => {

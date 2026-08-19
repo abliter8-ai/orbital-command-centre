@@ -26,5 +26,20 @@ describe("createOccServer in-process", () => {
     });
     expect(JSON.stringify(delegated)).toMatch(/in-process canned/);
     expect(handle.prompts).toHaveLength(1);
+
+    const cursor = new FakeAgentHandle({
+      agentId: "cursor",
+      summary: "cursor canned",
+      output: "cursor canned",
+    });
+    const both = new AgentRegistry();
+    both.register(handle);
+    both.register(cursor);
+    const dual = createOccServer({ registry: both, store: new InMemoryTaskStore() });
+    const dualClient = await Client.connect(dual);
+    const cursorResult = await dualClient.callTool("delegate_to_cursor", {
+      brief: "use cursor",
+    });
+    expect(JSON.stringify(cursorResult)).toMatch(/cursor canned/);
   });
 });

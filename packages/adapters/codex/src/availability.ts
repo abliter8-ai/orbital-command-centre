@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
+import { commandForBin } from "@occ/adapter-kit";
 import type { Availability } from "@occ/core";
-import { commandForBin } from "./run-exec.js";
 import { resolveCodexBin } from "./spawn-args.js";
 
 function runVersion(bin: string): Promise<{ code: number | null; stdout: string; stderr: string }> {

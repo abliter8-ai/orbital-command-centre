@@ -20,9 +20,23 @@ importers:
 
   packages/adapters/codex:
     dependencies:
+      '@occ/adapter-kit':
+        specifier: workspace:*
+        version: link:../kit
       '@occ/core':
         specifier: workspace:*
         version: link:../../core
+
+  packages/adapters/cursor:
+    dependencies:
+      '@occ/adapter-kit':
+        specifier: workspace:*
+        version: link:../kit
+      '@occ/core':
+        specifier: workspace:*
+        version: link:../../core
+
+  packages/adapters/kit: {}
 
   packages/core: {}
 
@@ -31,6 +45,9 @@ importers:
       '@occ/adapter-codex':
         specifier: workspace:*
         version: link:../adapters/codex
+      '@occ/adapter-cursor':
+        specifier: workspace:*
+        version: link:../adapters/cursor
       '@occ/core':
         specifier: workspace:*
         version: link:../core

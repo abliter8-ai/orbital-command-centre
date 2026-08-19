@@ -1,14 +1,4 @@
-import { execFile } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { promisify } from "node:util";
-import {
-  clampTimeout,
-  resolveCwd,
-  summariseOutput,
-  validateCwd,
-} from "@occ/adapter-kit";
+import { clampTimeout, resolveCwd, runChild, summariseOutput, validateCwd } from "@occ/adapter-kit";
 import {
   InMemoryTaskStore,
   isPendingSessionId,
@@ -23,16 +13,19 @@ import {
   type Session,
   type SessionOptions,
 } from "@occ/core";
-import { probeCodexAvailability } from "./availability.js";
-import { parseExecJsonl } from "./parse-exec-jsonl.js";
-import { runCodexExec } from "./run-exec.js";
-import { DEFAULT_SANDBOX, buildCodexExecArgs, resolveCodexBin } from "./spawn-args.js";
+import { probeCursorAvailability } from "./availability.js";
+import { normalizeHeadlessOutcome } from "./parse-headless.js";
+import {
+  DEFAULT_SANDBOX,
+  buildHeadlessArgs,
+  cursorSpawnEnv,
+  outputFormatForSandbox,
+  resolveCursorBin,
+} from "./spawn-args.js";
 
-const execFileAsync = promisify(execFile);
-
-export class CodexAgentHandle implements AgentHandle {
-  readonly agentId: AgentId = "codex";
-  readonly displayName = "Codex";
+export class CursorAgentHandle implements AgentHandle {
+  readonly agentId: AgentId = "cursor";
+  readonly displayName = "Cursor";
 
   private readonly store: InMemoryTaskStore;
   private readonly inflight = new Map<string, AbortController>();
@@ -52,7 +45,7 @@ export class CodexAgentHandle implements AgentHandle {
   }
 
   isAvailable(): Promise<Availability> {
-    return probeCodexAvailability();
+    return probeCursorAvailability();
   }
 
   async startSession(opts: SessionOptions): Promise<Session> {
@@ -80,7 +73,7 @@ export class CodexAgentHandle implements AgentHandle {
 
     const cwdCheck = await validateCwd(session.cwd);
     if (!cwdCheck.ok) {
-      const result = this.fail(task.taskId, session, request, started, {
+      const result = this.fail(task.taskId, session, started, {
         code: "invalid_cwd",
         message: cwdCheck.message,
         hint: "Pass an existing directory as cwd.",
@@ -89,44 +82,41 @@ export class CodexAgentHandle implements AgentHandle {
       return result;
     }
 
-    const timeoutMs = clampTimeout(request.timeoutMs);
     const sandbox = request.sandbox ?? DEFAULT_SANDBOX;
-    const tmp = await mkdtemp(join(tmpdir(), "occ-codex-"));
-    const lastMessagePath = join(tmp, "last-message.txt");
+    const format = outputFormatForSandbox(sandbox);
     const controller = new AbortController();
     this.inflight.set(task.taskId, controller);
 
-    const args = buildCodexExecArgs({
+    const args = buildHeadlessArgs({
       cwd: cwdCheck.cwd,
-      brief: request.brief,
       sandbox,
       model: this.sessionModels.get(session.sessionId),
       resumeSessionId: session.sessionId,
-      lastMessagePath,
     });
 
     try {
-      const ran = await runCodexExec({
-        bin: resolveCodexBin(),
+      const ran = await runChild({
+        bin: resolveCursorBin(),
         args,
         cwd: cwdCheck.cwd,
-        timeoutMs,
-        lastMessagePath,
+        timeoutMs: clampTimeout(request.timeoutMs),
+        stdin: request.brief.endsWith("\n") ? request.brief : `${request.brief}\n`,
+        env: cursorSpawnEnv(),
         signal: controller.signal,
       });
 
       if (ran.spawnError) {
-        const result = this.fail(task.taskId, session, request, started, {
+        const result = this.fail(task.taskId, session, started, {
           code: "spawn_failed",
           message: ran.spawnError,
-          hint: "Install Codex and ensure it is on PATH, or set CODEX_BIN.",
+          hint: "Install the Cursor agent CLI and ensure `agent` is on PATH, or set CURSOR_BIN.",
         });
         this.store.complete(task.taskId, result);
         return result;
       }
 
       if (ran.cancelled) {
-        const result = this.fail(task.taskId, session, request, started, {
+        const result = this.fail(task.taskId, session, started, {
           code: "cancelled",
           message: "Delegation cancelled.",
         });
@@ -136,47 +126,42 @@ export class CodexAgentHandle implements AgentHandle {
       }
 
       if (ran.timedOut) {
-        const result = this.fail(task.taskId, session, request, started, {
+        const result = this.fail(task.taskId, session, started, {
           code: "timeout",
-          message: `Codex exceeded timeout of ${timeoutMs}ms.`,
+          message: `Cursor exceeded timeout of ${clampTimeout(request.timeoutMs)}ms.`,
           hint: "Tighten the brief or raise timeout_ms (max 1800000).",
         });
         this.store.complete(task.taskId, result);
         return result;
       }
 
-      const parsed = parseExecJsonl(ran.stdout);
-      const output = parsed.output || ran.lastMessage;
+      const parsed = normalizeHeadlessOutcome({
+        stdout: ran.stdout,
+        stderr: ran.stderr,
+        exitCode: ran.code,
+        format,
+      });
       const sessionId =
-        parsed.threadId ??
+        parsed.sessionId ??
         (isPendingSessionId(session.sessionId) ? session.sessionId : session.sessionId);
 
-      if (parsed.fatalError || parsed.turnFailed || ran.code !== 0) {
-        const message =
-          parsed.turnFailed ??
-          parsed.fatalError ??
-          ran.stderr.trim() ??
-          `codex exec exited ${ran.code}`;
-        const login = /not logged in|codex login/i.test(`${message}\n${ran.stderr}`);
-        const result = this.fail(task.taskId, session, request, started, {
+      if (parsed.isError) {
+        const login = /not signed in|not logged in|keychain is locked/i.test(
+          `${parsed.errorMessage}\n${ran.stderr}`,
+        );
+        const result = this.fail(task.taskId, session, started, {
           code: "agent_failed",
-          message,
-          hint: login ? "Run `codex login` and retry." : undefined,
+          message: parsed.errorMessage ?? "Cursor failed.",
+          hint: login
+            ? "Unlock the login keychain or run `agent login`. OCC sets AGENT_CLI_CREDENTIAL_STORE=file for spawned agent processes."
+            : undefined,
         });
-        result.output = output;
-        result.summary = summariseOutput(output || message);
+        result.output = parsed.output;
+        result.summary = summariseOutput(parsed.output || result.summary);
         result.sessionId = sessionId;
         result.filesChanged = parsed.filesChanged;
-        result.usage = parsed.usage;
         this.store.complete(task.taskId, result);
         return result;
-      }
-
-      let filesChanged = parsed.filesChanged;
-      let diffStat: string | undefined;
-      if (filesChanged.length === 0) {
-        const statResult = await tryGitDiffStat(cwdCheck.cwd);
-        if (statResult) diffStat = statResult;
       }
 
       const result: DelegationResult = {
@@ -185,18 +170,15 @@ export class CodexAgentHandle implements AgentHandle {
         agentId: this.agentId,
         status: "succeeded",
         cwd: cwdCheck.cwd,
-        output,
-        summary: summariseOutput(output || "Codex completed with no assistant message."),
-        filesChanged,
-        diffStat,
+        output: parsed.output,
+        summary: summariseOutput(parsed.output || "Cursor completed with no assistant message."),
+        filesChanged: parsed.filesChanged,
         durationMs: Date.now() - started,
-        usage: parsed.usage,
       };
       this.store.complete(task.taskId, result);
       return result;
     } finally {
       this.inflight.delete(task.taskId);
-      await rm(tmp, { recursive: true, force: true });
     }
   }
 
@@ -205,18 +187,17 @@ export class CodexAgentHandle implements AgentHandle {
     try {
       this.store.cancel(taskId);
     } catch {
-      // unknown task ids are a no-op for cancel
+      // unknown task ids are a no-op
     }
   }
 
   async close(_session: Session): Promise<void> {
-    // Process-scoped handle; nothing to persist.
+    // Process-scoped handle.
   }
 
   private fail(
     taskId: string,
     session: Session,
-    _request: PromptRequest,
     started: number,
     error: DelegationError,
   ): DelegationResult {
@@ -234,16 +215,3 @@ export class CodexAgentHandle implements AgentHandle {
     };
   }
 }
-
-async function tryGitDiffStat(cwd: string): Promise<string | undefined> {
-  try {
-    const { stdout } = await execFileAsync("git", ["-C", cwd, "diff", "--stat"], {
-      timeout: 5_000,
-    });
-    const text = stdout.trim();
-    return text === "" ? undefined : text;
-  } catch {
-    return undefined;
-  }
-}
-

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { FakeAgentHandle } from "../src/fake-handle.js";
 import { AgentRegistry, UnknownAgentError } from "../src/registry.js";
+import type { AgentId } from "../src/types.js";
 
 describe("AgentRegistry", () => {
   it("registers a handle and returns it by id", () => {
@@ -18,7 +19,7 @@ describe("AgentRegistry", () => {
 
     const registry = new AgentRegistry();
     registry.register(new FakeAgentHandle());
-    const unknown = "nope" as unknown as "codex";
+    const unknown = "nope" as unknown as AgentId;
     expect(() => registry.get(unknown)).toThrow(/Known ids: codex/);
   });
 });

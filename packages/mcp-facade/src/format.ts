@@ -19,7 +19,7 @@ export function formatDelegationMarkdown(result: DelegationResult): string {
     : "";
 
   return [
-    `## Codex delegation`,
+    `## ${result.agentId} delegation`,
     `- **status:** ${result.status}`,
     `- **sessionId:** ${result.sessionId}`,
     `- **taskId:** ${result.taskId}`,

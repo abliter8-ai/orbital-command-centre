@@ -21,6 +21,7 @@
     "node": ">=22"
   },
   "dependencies": {
+    "@occ/adapter-kit": "workspace:*",
     "@occ/core": "workspace:*"
   }
 }

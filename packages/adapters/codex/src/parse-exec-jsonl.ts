@@ -98,7 +98,4 @@ export function parseExecJsonl(text: string): ParsedExec {
   return parsed;
 }
 
-export function summariseOutput(output: string, maxChars = 1500): string {
-  if (output.length <= maxChars) return output;
-  return `${output.slice(0, maxChars).trimEnd()}…`;
-}
+export { summariseOutput } from "@occ/adapter-kit";

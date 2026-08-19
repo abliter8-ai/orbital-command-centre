@@ -74,13 +74,13 @@ More adapters can be added without changing the control plane.
 
 ## Status
 
-**IP-001 loop landed (draft → approved 2026-08-19).** Claude Code can call `occ_health` and `delegate_to_codex` over MCP stdio. ACP, A2A, and the control-plane daemon are not built yet.
+**IP-001 + IP-002 landed.** Claude Code can call `occ_health`, `delegate_to_codex`, and `delegate_to_cursor` over MCP stdio. ACP, A2A, and the control-plane daemon are not built yet.
 
 ---
 
 ## Claude Code loop
 
-Requires Node ≥22, pnpm 10, and a local Codex CLI (`codex` on PATH, logged in).
+Requires Node ≥22, pnpm 10, and the local CLIs you want to delegate to (`codex`, `agent`).
 
 ```bash
 pnpm install
@@ -96,12 +96,12 @@ claude mcp add orbital -- node "$(pwd)/packages/mcp-facade/dist/stdio.js"
 
 Or copy `.mcp.json` into the workspace you want Claude to drive. Then:
 
-1. Call `occ_health`. Confirm Codex is `available` and `authenticated`.
-2. Call `delegate_to_codex` with a **self-contained brief**: goal, constraints, files in play, definition of done. Pass `cwd` if the server was not launched in that repo. Use `sandbox: "read-only"` for investigation.
+1. Call `occ_health`. Confirm the target CLI is `available` and `authenticated`.
+2. Call `delegate_to_codex` or `delegate_to_cursor` with a **self-contained brief**: goal, constraints, files in play, definition of done. Pass `cwd` if the server was not launched in that repo. Use `sandbox: "read-only"` for investigation.
 3. Review the structured result (status, summary, files changed, `sessionId`).
-4. To continue the same Codex thread, pass that `sessionId` as `resume_session_id`.
+4. To continue the same thread, pass that `sessionId` as `resume_session_id`.
 
-Default sandbox is `workspace-write`, sent as Codex `--approve-for-me` (0.148 refuses `--sandbox` together with that flag). `read-only` and `danger-full-access` pass `--sandbox` only. OCC never passes `--dangerously-bypass-approvals-and-sandbox`.
+Codex default write path is `--approve-for-me` (0.148 refuses `--sandbox` together with that flag). Cursor write path is `agent -p --force --trust` with stream-json; read-only is `--mode ask`. OCC never passes `--dangerously-bypass-approvals-and-sandbox`. Spawned Cursor processes set `AGENT_CLI_CREDENTIAL_STORE=file` so a locked macOS login keychain does not fail the CLI.
 
 ---
 
@@ -110,8 +110,10 @@ Default sandbox is `workspace-write`, sent as Codex `--approve-for-me` (0.148 re
 ```
 packages/
   core/                 # AgentHandle, Task/Session model, types
-  adapters/codex/       # codex exec adapter
-  mcp-facade/           # FastMCP tools (occ_health, delegate_to_codex)
+  adapters/kit/         # shared spawn / cwd
+  adapters/codex/       # codex exec
+  adapters/cursor/      # agent -p
+  mcp-facade/           # occ_health, delegate_to_codex, delegate_to_cursor
 ```
 
 Still planned, not in this repo yet: `packages/acp`, `packages/a2a`, more adapters, `packages/control-plane`.
@@ -135,7 +137,7 @@ Same agents remain available to any ACP client or A2A peer.
 - [x] Core `AgentHandle` interface + task model
 - [x] First working adapter (Codex via `codex exec`)
 - [x] MCP façade (`delegate_to_codex`)
-- [ ] Second adapter + basic registry
+- [x] Second adapter (Cursor via `agent -p`) + in-memory registry
 - [ ] A2A server surface on the same handles
 - [ ] Full control-plane daemon (lifecycle, isolation, permissions)
 - [ ] Polish, docs, and more adapters
