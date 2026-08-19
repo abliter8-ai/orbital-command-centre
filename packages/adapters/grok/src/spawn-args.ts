@@ -10,6 +10,10 @@ export interface GrokHeadlessArgOptions {
   model?: string;
   effort?: ReasoningEffort;
   resumeSessionId?: string;
+  /** Hard-block the generic web path so X tools must be used (live X retrieval). */
+  disableWebSearch?: boolean;
+  /** Cap tool loops; media generation needs more than the default. */
+  maxTurns?: number;
 }
 
 export function grokSandboxFlag(sandbox: SandboxMode): string | undefined {
@@ -33,6 +37,12 @@ export function buildHeadlessArgs(opts: GrokHeadlessArgOptions): string[] {
   ];
   if (opts.sandbox !== "read-only") {
     args.push("--always-approve");
+  }
+  if (opts.disableWebSearch) {
+    args.push("--disable-web-search");
+  }
+  if (opts.maxTurns !== undefined && Number.isInteger(opts.maxTurns) && opts.maxTurns > 0) {
+    args.push("--max-turns", String(opts.maxTurns));
   }
   if (opts.model?.trim()) {
     args.push("-m", opts.model.trim());

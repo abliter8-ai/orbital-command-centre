@@ -66,21 +66,29 @@ pass Codex `effort: "xhigh"` on this tool — that field exists only on
 - Invented names like `composer-2.5-fast` unless `cursor-agent models` listed them
   **this session**
 
-Live catalog: `cursor-agent models` or `cursor-agent --list-models`. That command
-requires `CURSOR_API_KEY` / `CURSOR_AUTH_TOKEN` even when `cursor-agent status`
-shows OAuth login. If listing fails, stick to `auto` / `gpt-5` / `sonnet-4-thinking`.
+Live catalog: **call `occ_models`** — OCC probes `cursor-agent --list-models`
+and caches the result (200+ slugs, incl. `composer-*` and parameterized
+`name[context=…,effort=…,fast=…]` forms). Refresh with `scripts/update-models.sh`.
+If the catalog entry is `source: "static"`, stick to `auto` / `gpt-5` /
+`sonnet-4-thinking` — the raw listing command can require `CURSOR_API_KEY` /
+`CURSOR_AUTH_TOKEN` even when `cursor-agent status` shows OAuth login.
 
-** Use 'Cursor Grok 4.6' by default.**
-    Auto
-    Cursor Grok 4.6          High Fast
-    Composer 2.5             Fast
-    Claude Opus 5            300K High
-    Claude Opus 4.8          300K High
-    GPT-5.6 Sol              272K Medium
-    GPT-5.5                  272K Medium
-    Claude Fable 5           300K High
-    Cursor Grok 4.5          High Fast
-    Gemini 3.7 Flash         High
+**David's default: `grok-4.6` on Cursor** (listed as "Cursor Grok 4.6", High
+Fast) when the live catalog shows it; otherwise `auto`.
+
+## Native surface
+
+- **Plan/ask mode** — `sandbox: "read-only"` maps to `--mode ask --force`:
+  analysis without edits. Cursor's cheapest, safest investigation.
+- **Model catalog** — the widest of the four agents; `occ_models` is the
+  discovery path, not hand-written slugs.
+- **MCP client** — cursor-agent can itself attach MCP servers for the
+  delegated run; name the MCP tools it may use in the brief.
+
+Cursor has no web-search or media-generation surface worth routing here — use
+Grok (`grok_x_search` / `grok_imagine`) or Antigravity (`google_search`).
+`occ_capabilities` shows the full per-agent map.
+
 ## Other tool fields
 
 | Field | Notes |

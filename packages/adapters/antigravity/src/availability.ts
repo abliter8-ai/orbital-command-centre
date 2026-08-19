@@ -35,7 +35,9 @@ export function isAgyLoggedIn(stdout: string, stderr: string): boolean {
 export function parseAgyModelCatalog(text: string): string[] {
   const models: string[] = [];
   for (const line of text.split(/\r?\n/)) {
-    const match = line.match(/^((?:gemini|claude|gpt-oss)-[a-z0-9.-]+?)(?=[A-Z]|$)/);
+    // Live `agy models` is tab-separated: "gemini-3.7-flash-high\tGemini 3.7 Flash (High)".
+    // Older fixtures glued the description on with no separator, so allow both.
+    const match = line.match(/^((?:gemini|claude|gpt-oss)-[a-z0-9.-]+?)(?=\s+[A-Z]|[A-Z]|$)/);
     if (match?.[1]) models.push(match[1]);
   }
   return models;

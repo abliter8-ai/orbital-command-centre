@@ -51,4 +51,30 @@ describe("InMemoryTaskStore", () => {
     expect(cancelled.status).toBe("cancelled");
     expect(store.get(created.taskId)?.status).toBe("cancelled");
   });
+
+  it("lists tasks newest-first with optional status filter", () => {
+    const store = new InMemoryTaskStore();
+    const older = store.create({
+      sessionId: "sess-a",
+      agentId: "codex",
+      request: { brief: "first" },
+    });
+    const newer = store.create({
+      sessionId: "sess-b",
+      agentId: "grok",
+      request: { brief: "second" },
+    });
+    store.markRunning(newer.taskId);
+
+    const all = store.list();
+    expect(all).toHaveLength(2);
+    expect(all[0]?.taskId).toBe(newer.taskId);
+    expect(all[1]?.taskId).toBe(older.taskId);
+
+    const running = store.list({ status: "running" });
+    expect(running.map((task) => task.taskId)).toEqual([newer.taskId]);
+
+    const terminal = store.list({ status: ["succeeded", "failed", "cancelled"] });
+    expect(terminal).toHaveLength(0);
+  });
 });

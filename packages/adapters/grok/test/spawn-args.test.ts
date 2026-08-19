@@ -66,6 +66,32 @@ describe("buildHeadlessArgs", () => {
     });
     expect(args).not.toContain("-r");
   });
+
+  it("passes --disable-web-search and --max-turns for native-tool runs", () => {
+    const args = buildHeadlessArgs({
+      cwd: "/tmp/repo",
+      brief: "Search X …",
+      sandbox: "workspace-write",
+      disableWebSearch: true,
+      maxTurns: 8,
+    });
+    expect(args).toContain("--disable-web-search");
+    expect(args[args.indexOf("--max-turns") + 1]).toBe("8");
+    expect(args).toContain("--always-approve");
+  });
+
+  it("omits native flags when unset and ignores a bad maxTurns", () => {
+    const plain = buildHeadlessArgs({ cwd: "/tmp/repo", brief: "x", sandbox: "read-only" });
+    expect(plain).not.toContain("--disable-web-search");
+    expect(plain).not.toContain("--max-turns");
+    const bad = buildHeadlessArgs({
+      cwd: "/tmp/repo",
+      brief: "x",
+      sandbox: "read-only",
+      maxTurns: 0,
+    });
+    expect(bad).not.toContain("--max-turns");
+  });
 });
 
 describe("resolveGrokBin", () => {

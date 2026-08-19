@@ -1,36 +1,65 @@
+import { summariseOutput } from "@occ/adapter-kit";
 import type {
+  GrokImagineOptions,
+  GrokVideoOptions,
+  GrokXSearchOptions,
+} from "@occ/adapter-grok";
+import type {
+  AgentHandle,
   AgentId,
   AgentRegistry,
   DelegationResult,
   InMemoryTaskStore,
   ReasoningEffort,
   SandboxMode,
+  TaskStatus,
 } from "@occ/core";
+import {
+  catalogAgeMs,
+  catalogPath,
+  isCatalogStale,
+  type AgentModelCatalog,
+  type ModelCatalog,
+} from "./catalog.js";
 
 export const DELEGATE_BRIEF_DESCRIPTION =
   "Self-contained brief: goal, constraints, files in play, definition of done.";
 
-export const DELEGATE_TO_CODEX_DESCRIPTION = `Delegate an implementation or investigation brief to the local Codex CLI (codex exec). Use when Claude should plan/review and Codex should do the repo work. Write a self-contained brief: goal, constraints, files in play, definition of done. Returns status, last message, changed files, and a sessionId for resume_session_id.
+const CODEX_INTRO = `Delegate an implementation or investigation brief to the local Codex CLI (codex exec). Use when Claude should plan/review and Codex should do the repo work. Write a self-contained brief: goal, constraints, files in play, definition of done. Returns status, last message, changed files, and a sessionId for resume_session_id.`;
+const CODEX_MODEL_CAUTIONS = `Do not use gpt-5.1-codex or gpt-5.3-codex on ChatGPT auth. gpt-5.4 / gpt-5.4-mini retire 2026-08-31.`;
+const CODEX_EFFORT = `Reasoning effort (optional, maps to model_reasoning_effort): low, medium (config default), high, xhigh, max. Omit to use ~/.codex/config.toml.`;
 
-Models (Codex CLI 0.148+, ChatGPT login): gpt-5.6-sol (flagship), gpt-5.6-terra (everyday), gpt-5.6-luna (fast/cheap, current ~/.codex default), gpt-5.6 (alias → sol), gpt-5.5 (previous gen). Do not use gpt-5.1-codex or gpt-5.3-codex on ChatGPT auth. gpt-5.4 / gpt-5.4-mini retire 2026-08-31.
+const CURSOR_INTRO = `Delegate an implementation or investigation brief to the local Cursor CLI (\`cursor-agent -p\`). Never spawn \`agent\` — that name is Grok on some PATHs. Use when Claude should plan/review and Cursor should do the repo work. Write a self-contained brief: goal, constraints, files in play, definition of done. Returns status, last message, changed files, and a sessionId for resume_session_id.`;
+const CURSOR_MODEL_CAUTIONS = `Parameterized form: claude-opus-4-8[context=1m,effort=high,fast=false]. There is no separate effort field — encode effort in the model slug. Do not pass Codex-config slugs blindly; prefer entries from this catalog.`;
 
-Reasoning effort (optional, maps to model_reasoning_effort): low, medium (config default), high, xhigh, max. Omit to use ~/.codex/config.toml.`;
+const GROK_INTRO = `Delegate an implementation, investigation, live X/web, or Imagine brief to the local Grok CLI (\`grok -p --output-format json\`). Never spawn the binary named \`agent\` when you meant Cursor — \`agent\` is Grok on PATHs that include ~/.grok/bin. Use when the user asked for Grok, or the brief needs Grok-native tools (web_search/web_fetch, X search, Imagine). Write a self-contained brief: goal, constraints, files in play, definition of done. Name native tools in the brief; they are not OCC tools. Returns status, last message, sessionId for resume_session_id.`;
+const GROK_MODEL_CAUTIONS = `Local aliases (dsv4-*, glm-*, minimax-*) are valid only when they appear in this catalog. Do not pass Codex or Cursor slugs.`;
+const GROK_EFFORT = `Reasoning effort (optional, maps to --effort): low, medium, high, xhigh, max. Omit for Grok default.`;
 
-export const DELEGATE_TO_CURSOR_DESCRIPTION = `Delegate an implementation or investigation brief to the local Cursor CLI (\`cursor-agent -p\`). Never spawn \`agent\` — that name is Grok on some PATHs. Use when Claude should plan/review and Cursor should do the repo work. Write a self-contained brief: goal, constraints, files in play, definition of done. Returns status, last message, changed files, and a sessionId for resume_session_id.
+const ANTIGRAVITY_INTRO = `Delegate an implementation or investigation brief to the local Antigravity CLI (\`agy -p --output-format json\`). Antigravity is Google's agent CLI (successor surface to Gemini CLI). Never spawn \`gemini\` — that is a different binary. Write a self-contained brief. Returns status, last message, sessionId (conversation_id) for resume_session_id.`;
+const ANTIGRAVITY_MODEL_CAUTIONS = `Unknown --model is a hard ERROR — pass only slugs from this catalog. Do not pass Codex or Grok slugs.`;
+const ANTIGRAVITY_EFFORT = `Reasoning effort (optional, --effort): low, medium, high. OCC xhigh/max map to high. Native web (\`google_search\`, \`read_url\`, \`execute_url\`) stays inside agy — name it in the brief and pre-allow in ~/.gemini/antigravity-cli/settings.json, or use sandbox danger-full-access.`;
 
-Models (headless --model, CLI 2026.08.11+): omit or \`auto\` (Cursor default). Documented slugs: gpt-5, sonnet-4-thinking. Parameterized: claude-opus-4-8[context=1m,effort=high,fast=false]. Do not pass Codex slugs (gpt-5.6-luna/terra/sol). Do not invent bracketed ACP modelIds from the desktop. There is no separate effort field — encode effort in the model slug. Catalog listing (\`cursor-agent models\`) requires CURSOR_API_KEY; OAuth-only login can still run -p.`;
+export function formatModelSection(entry: AgentModelCatalog): string {
+  const fetched = entry.fetchedAt ?? "never";
+  const cli = entry.cliVersion ? `, CLI ${entry.cliVersion}` : "";
+  const fallback =
+    entry.source === "static"
+      ? " Built-in fallback — run scripts/update-models.sh (or .ps1) for the live catalog."
+      : "";
+  const list = entry.models.join(", ");
+  const def = entry.defaultModel ? ` Default: ${entry.defaultModel}.` : "";
+  return `Models (catalog ${entry.source}, fetched ${fetched}${cli}): ${list}.${def}${fallback}`;
+}
 
-export const DELEGATE_TO_GROK_DESCRIPTION = `Delegate an implementation, investigation, live X/web, or Imagine brief to the local Grok CLI (\`grok -p --output-format json\`). Never spawn the binary named \`agent\` when you meant Cursor — \`agent\` is Grok on PATHs that include ~/.grok/bin. Use when the user asked for Grok, or the brief needs Grok-native tools (web_search/web_fetch, X search, Imagine). Write a self-contained brief: goal, constraints, files in play, definition of done. Name native tools in the brief; they are not OCC tools. Returns status, last message, sessionId for resume_session_id.
-
-Models (CLI 1.0.5+, grok.com login): omit for grok-4.6 (CLI default). grok-4.5 is previous gen. Local aliases (dsv4-*, glm-5-2, minimax-m3, …) only if occ_health / \`grok models\` listed them this session. Do not pass Codex slugs (gpt-5.6-luna/terra/sol) or Cursor slugs (auto, gpt-5, sonnet-4-thinking).
-
-Reasoning effort (optional, maps to --effort): low, medium, high, xhigh, max. Omit for Grok default.`;
-
-export const DELEGATE_TO_ANTIGRAVITY_DESCRIPTION = `Delegate an implementation or investigation brief to the local Antigravity CLI (\`agy -p --output-format json\`). Antigravity is Google's agent CLI (successor surface to Gemini CLI). Never spawn \`gemini\` — that is a different binary. Write a self-contained brief. Returns status, last message, sessionId (conversation_id) for resume_session_id.
-
-Models (CLI 1.1.15, from \`agy models\`): gemini-3.7-flash-high|medium|low, gemini-3.6-flash-*, gemini-3.5-flash-*, gemini-3.1-pro-high|low, claude-sonnet-4-6, claude-opus-4-6-thinking, gpt-oss-120b-medium. Unknown --model is a hard ERROR. Do not pass Codex or Grok slugs.
-
-Reasoning effort (optional, --effort): low, medium, high. OCC xhigh/max map to high. Native web (\`google_search\`, \`read_url\`, \`execute_url\`) stays inside agy — name it in the brief and pre-allow in ~/.gemini/antigravity-cli/settings.json, or use sandbox danger-full-access.`;
+export function buildDelegateDescriptions(catalog: ModelCatalog): Record<AgentId, string> {
+  return {
+    codex: `${CODEX_INTRO}\n\n${formatModelSection(catalog.agents.codex)} ${CODEX_MODEL_CAUTIONS}\n\n${CODEX_EFFORT}`,
+    cursor: `${CURSOR_INTRO}\n\n${formatModelSection(catalog.agents.cursor)} ${CURSOR_MODEL_CAUTIONS}`,
+    grok: `${GROK_INTRO}\n\n${formatModelSection(catalog.agents.grok)} ${GROK_MODEL_CAUTIONS}\n\n${GROK_EFFORT}`,
+    antigravity: `${ANTIGRAVITY_INTRO}\n\n${formatModelSection(catalog.agents.antigravity)} ${ANTIGRAVITY_MODEL_CAUTIONS}\n\n${ANTIGRAVITY_EFFORT}`,
+  };
+}
 
 export interface DelegateInput {
   brief: string;
@@ -172,4 +201,205 @@ export function runDelegateToAntigravity(
   input: DelegateInput,
 ): Promise<DelegationResult> {
   return runDelegate(registry, store, "antigravity", input);
+}
+
+export interface TaskListEntry {
+  taskId: string;
+  agentId: AgentId;
+  sessionId: string;
+  status: TaskStatus;
+  startedAt: string;
+  finishedAt?: string;
+  brief: string;
+  sandbox?: SandboxMode;
+  summary?: string;
+}
+
+export function runListTasks(
+  store: InMemoryTaskStore,
+  filter?: { status?: TaskStatus[] },
+): { tasks: TaskListEntry[] } {
+  return {
+    tasks: store.list({ status: filter?.status }).map((record) => ({
+      taskId: record.taskId,
+      agentId: record.agentId,
+      sessionId: record.sessionId,
+      status: record.status,
+      startedAt: record.startedAt,
+      finishedAt: record.finishedAt,
+      brief: summariseOutput(record.request.brief, 160),
+      sandbox: record.request.sandbox,
+      summary: record.result ? summariseOutput(record.result.summary, 300) : undefined,
+    })),
+  };
+}
+
+export interface CancelResult {
+  ok: boolean;
+  taskId: string;
+  agentId?: AgentId;
+  status?: TaskStatus;
+  error?: {
+    code: "unknown_task" | "not_running";
+    message: string;
+  };
+}
+
+export async function runCancel(
+  registry: AgentRegistry,
+  store: InMemoryTaskStore,
+  taskId: string,
+): Promise<CancelResult> {
+  const record = store.get(taskId);
+  if (!record) {
+    return {
+      ok: false,
+      taskId,
+      error: {
+        code: "unknown_task",
+        message: `Unknown task id: ${taskId}. Get running task ids from occ_tasks. The store is in-memory and resets when the MCP server restarts.`,
+      },
+    };
+  }
+  if (record.status !== "running" && record.status !== "queued") {
+    return {
+      ok: false,
+      taskId,
+      agentId: record.agentId,
+      status: record.status,
+      error: {
+        code: "not_running",
+        message: `Task is ${record.status}; only queued or running tasks can be cancelled.`,
+      },
+    };
+  }
+  const handle = registry.get(record.agentId);
+  await handle.cancel(taskId);
+  // Real handles mark the store themselves; do it here too so the state is
+  // consistent even if the handle raced us to completion.
+  const after = store.get(taskId);
+  if (after && (after.status === "running" || after.status === "queued")) {
+    store.cancel(taskId);
+  }
+  return { ok: true, taskId, agentId: record.agentId, status: "cancelled" };
+}
+
+export function runModels(
+  catalog: ModelCatalog,
+  path: string = catalogPath(),
+): {
+  path: string;
+  updatedAt: string | null;
+  ageMs: number | null;
+  stale: boolean;
+  agents: AgentModelCatalog[];
+} {
+  return {
+    path,
+    updatedAt: catalog.updatedAt,
+    ageMs: catalogAgeMs(catalog),
+    stale: isCatalogStale(catalog),
+    agents: [catalog.agents.codex, catalog.agents.cursor, catalog.agents.grok, catalog.agents.antigravity],
+  };
+}
+
+/**
+ * The Grok handle's native tools (X search, Imagine) beyond the plain
+ * AgentHandle contract. Structural, so tests can substitute a fake.
+ */
+export interface GrokNativeHandle extends AgentHandle {
+  xSearch(opts: GrokXSearchOptions): Promise<DelegationResult>;
+  imagine(opts: GrokImagineOptions): Promise<DelegationResult>;
+  animateVideo(opts: GrokVideoOptions): Promise<DelegationResult>;
+}
+
+export function isGrokNativeHandle(handle: AgentHandle): handle is GrokNativeHandle {
+  const candidate = handle as Partial<GrokNativeHandle>;
+  return (
+    handle.agentId === "grok" &&
+    typeof candidate.xSearch === "function" &&
+    typeof candidate.imagine === "function" &&
+    typeof candidate.animateVideo === "function"
+  );
+}
+
+async function runGrokNative(
+  registry: AgentRegistry,
+  store: InMemoryTaskStore,
+  briefForStore: string,
+  fn: (handle: GrokNativeHandle) => Promise<DelegationResult>,
+): Promise<DelegationResult> {
+  const handle = registry.get("grok");
+  const availability = await handle.isAvailable();
+  if (!availability.available || !availability.authenticated) {
+    return {
+      taskId: "task_unavailable",
+      sessionId: "none",
+      agentId: "grok",
+      status: "failed",
+      cwd: process.cwd(),
+      summary: availability.detail,
+      output: "",
+      filesChanged: [],
+      durationMs: 0,
+      error: {
+        code: availability.available ? "not_authenticated" : "not_available",
+        message: availability.detail,
+        hint: availability.available ? HINTS.grok.unauthenticated : HINTS.grok.missing,
+      },
+    };
+  }
+  if (!isGrokNativeHandle(handle)) {
+    return {
+      taskId: "task_unavailable",
+      sessionId: "none",
+      agentId: "grok",
+      status: "failed",
+      cwd: process.cwd(),
+      summary: "The registered Grok handle does not expose native tools.",
+      output: "",
+      filesChanged: [],
+      durationMs: 0,
+      error: {
+        code: "agent_failed",
+        message: "The registered Grok handle does not expose native tools.",
+        hint: "Update @occ/adapter-grok to a build with xSearch/imagine/animateVideo.",
+      },
+    };
+  }
+  const result = await fn(handle);
+  // The handle writes its own task record when it shares this store; record
+  // again so a detached handle store still leaves the task visible here.
+  store.record(result, { brief: briefForStore });
+  return result;
+}
+
+export function runGrokXSearch(
+  registry: AgentRegistry,
+  store: InMemoryTaskStore,
+  input: GrokXSearchOptions,
+): Promise<DelegationResult> {
+  return runGrokNative(registry, store, `X search: ${input.query}`, (handle) =>
+    handle.xSearch(input),
+  );
+}
+
+export function runGrokImagine(
+  registry: AgentRegistry,
+  store: InMemoryTaskStore,
+  input: GrokImagineOptions,
+): Promise<DelegationResult> {
+  return runGrokNative(registry, store, `Imagine: ${input.prompt}`, (handle) =>
+    handle.imagine(input),
+  );
+}
+
+export function runGrokVideo(
+  registry: AgentRegistry,
+  store: InMemoryTaskStore,
+  input: GrokVideoOptions,
+): Promise<DelegationResult> {
+  return runGrokNative(registry, store, `Video from ${input.sourceImage}`, (handle) =>
+    handle.animateVideo(input),
+  );
 }

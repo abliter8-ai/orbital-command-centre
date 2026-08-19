@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcess, type SpawnOptions } from "node:child_process";
 import { readFile } from "node:fs/promises";
 
 export interface RunChildOptions {
@@ -10,6 +10,8 @@ export interface RunChildOptions {
   env?: NodeJS.ProcessEnv;
   lastMessagePath?: string;
   signal?: AbortSignal;
+  /** Grace period after SIGTERM before SIGKILL. Default 4000. */
+  killGraceMs?: number;
 }
 
 export interface RunChildOutput {
@@ -22,11 +24,57 @@ export interface RunChildOutput {
   spawnError?: string;
 }
 
+export const DEFAULT_KILL_GRACE_MS = 4_000;
+
 export function commandForBin(bin: string, args: string[]): { command: string; args: string[] } {
   if (bin.endsWith(".mjs") || bin.endsWith(".js")) {
     return { command: process.execPath, args: [bin, ...args] };
   }
   return { command: bin, args };
+}
+
+/**
+ * Pure spawn-option builder, exported for tests. POSIX spawns are detached so
+ * the child leads its own process group — that is what makes the group kill in
+ * killTree actually reach grandchildren (agent-spawned servers, test runners).
+ */
+export function buildSpawnOptions(opts: RunChildOptions): SpawnOptions {
+  return {
+    cwd: opts.cwd,
+    env: opts.env ?? process.env,
+    stdio: [opts.stdin === undefined ? "ignore" : "pipe", "pipe", "pipe"],
+    detached: process.platform !== "win32",
+  };
+}
+
+/**
+ * Kill the child and everything it spawned. POSIX: signal the process group
+ * (requires the detached spawn from buildSpawnOptions), falling back to the
+ * direct child if the group is gone. Windows: taskkill /T walks the tree.
+ */
+export function killTree(child: ChildProcess, signal: NodeJS.Signals = "SIGTERM"): void {
+  if (!child.pid) return;
+  if (process.platform === "win32") {
+    try {
+      const tk = spawn("taskkill", ["/PID", String(child.pid), "/T", "/F"], {
+        stdio: "ignore",
+      });
+      tk.on("error", () => {});
+      tk.unref();
+    } catch {
+      child.kill(signal);
+    }
+    return;
+  }
+  try {
+    process.kill(-child.pid, signal);
+  } catch {
+    try {
+      child.kill(signal);
+    } catch {
+      // already gone
+    }
+  }
 }
 
 export async function runChild(opts: RunChildOptions): Promise<RunChildOutput> {
@@ -49,11 +97,7 @@ export async function runChild(opts: RunChildOptions): Promise<RunChildOutput> {
     let child;
     try {
       const invoked = commandForBin(opts.bin, opts.args);
-      child = spawn(invoked.command, invoked.args, {
-        cwd: opts.cwd,
-        env: opts.env ?? process.env,
-        stdio: [opts.stdin === undefined ? "ignore" : "pipe", "pipe", "pipe"],
-      });
+      child = spawn(invoked.command, invoked.args, buildSpawnOptions(opts));
     } catch (error) {
       void finish({
         code: null,
@@ -79,18 +123,19 @@ export async function runChild(opts: RunChildOptions): Promise<RunChildOutput> {
       stderr += chunk.toString("utf8");
     });
 
-    const killChild = () => {
-      if (child.pid) {
-        try {
-          process.kill(-child.pid, "SIGTERM");
-        } catch {
-          child.kill("SIGTERM");
-        }
-      }
+    let closed = false;
+    let escalate: NodeJS.Timeout | undefined;
+    const killAndEscalate = () => {
+      if (closed) return;
+      killTree(child, "SIGTERM");
+      escalate = setTimeout(() => {
+        if (!closed) killTree(child, "SIGKILL");
+      }, opts.killGraceMs ?? DEFAULT_KILL_GRACE_MS);
+      escalate.unref?.();
     };
 
     const timer = setTimeout(() => {
-      killChild();
+      killAndEscalate();
       void finish({
         code: null,
         stdout,
@@ -102,7 +147,7 @@ export async function runChild(opts: RunChildOptions): Promise<RunChildOutput> {
 
     const onAbort = () => {
       clearTimeout(timer);
-      killChild();
+      killAndEscalate();
       void finish({
         code: null,
         stdout,
@@ -115,6 +160,7 @@ export async function runChild(opts: RunChildOptions): Promise<RunChildOutput> {
 
     child.on("error", (error) => {
       clearTimeout(timer);
+      if (escalate) clearTimeout(escalate);
       opts.signal?.removeEventListener("abort", onAbort);
       void finish({
         code: null,
@@ -127,7 +173,9 @@ export async function runChild(opts: RunChildOptions): Promise<RunChildOutput> {
     });
 
     child.on("close", (code) => {
+      closed = true;
       clearTimeout(timer);
+      if (escalate) clearTimeout(escalate);
       opts.signal?.removeEventListener("abort", onAbort);
       void finish({
         code,

@@ -81,6 +81,22 @@ Maps to Codex `model_reasoning_effort`. Omit → `~/.codex/config.toml` (often `
 **Ultra is not `effort`.** Ultra is Codex subagent fan-out. OCC does not expose it.
 Do not pass `effort: "ultra"` or invent `reasoning_level`.
 
+## Native surface
+
+Codex's strength is the sandboxed code loop itself: shell, file edits, and
+test runs inside the OCC `sandbox` policy — that is the native tooling, and it
+is why Codex gets the hard implementation briefs. CLI features that exist but
+OCC does **not** expose yet:
+
+- `codex review` (non-interactive code review subcommand) — approximate with a
+  review brief: "Review the diff in this repo. Do not edit. Report findings by
+  severity."
+- `codex exec -i <image>` (image attach) — describe the image content in the
+  brief instead.
+
+Do not promise Codex web search or media generation — route those to Grok or
+Antigravity (`occ_capabilities` shows who owns what).
+
 ## Other tool fields
 
 | Field | Values / notes |

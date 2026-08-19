@@ -2,3 +2,6 @@ packages:
   - "packages/core"
   - "packages/adapters/*"
   - "packages/mcp-facade"
+  - "packages/acp"
+  - "packages/a2a"
+  - "packages/control-plane"

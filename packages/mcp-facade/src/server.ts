@@ -5,19 +5,30 @@ import { GrokAgentHandle } from "@occ/adapter-grok";
 import { AgentRegistry, InMemoryTaskStore } from "@occ/core";
 import { FastMCP } from "@prefecthq/fastmcp-ts/server";
 import { z } from "zod";
+import { extractSavedPaths } from "@occ/adapter-grok";
+import { loadCatalog, type ModelCatalog } from "./catalog.js";
+import { nativeCapabilities } from "./capabilities.js";
 import { formatDelegationMarkdown } from "./format.js";
 import {
-  DELEGATE_TO_ANTIGRAVITY_DESCRIPTION,
-  DELEGATE_TO_CODEX_DESCRIPTION,
-  DELEGATE_TO_CURSOR_DESCRIPTION,
-  DELEGATE_TO_GROK_DESCRIPTION,
+  buildDelegateDescriptions,
+  runCancel,
   runDelegate,
+  runGrokImagine,
+  runGrokVideo,
+  runGrokXSearch,
   runHealth,
+  runListTasks,
+  runModels,
 } from "./tools.js";
 
 export interface OccServerDeps {
   registry: AgentRegistry;
   store: InMemoryTaskStore;
+}
+
+export interface OccServerOptions {
+  /** Override the model catalog (tests). Defaults to loadCatalog() from disk. */
+  catalog?: ModelCatalog;
 }
 
 const sharedDelegateInput = {
@@ -52,7 +63,7 @@ const codexDelegateInput = {
     .string()
     .optional()
     .describe(
-      "Codex model slug. Omit to use ~/.codex/config.toml (currently gpt-5.6-luna on this machine). Recommended: gpt-5.6-sol (flagship), gpt-5.6-terra (everyday), gpt-5.6-luna (fast/cheap), gpt-5.6 (alias→sol), gpt-5.5 (previous gen). Avoid gpt-5.1-codex / gpt-5.3-codex on ChatGPT auth.",
+      "Codex model slug. Omit to use ~/.codex/config.toml. Pass only slugs listed in this tool's Models section or by occ_models.",
     ),
   effort: z
     .enum(["low", "medium", "high", "xhigh", "max"])
@@ -68,7 +79,7 @@ const cursorDelegateInput = {
     .string()
     .optional()
     .describe(
-      "Cursor --model. Omit for auto (CLI default). Verified slugs: auto, gpt-5, sonnet-4-thinking. Optional parameterized form: name[context=1m,effort=high,fast=false] e.g. claude-opus-4-8[effort=high]. Not a Codex slug. Not an ACP desktop modelId.",
+      "Cursor --model. Omit for auto (CLI default). Pass only slugs listed in this tool's Models section or by occ_models. Optional parameterized form: name[context=1m,effort=high,fast=false].",
     ),
 };
 
@@ -78,7 +89,7 @@ const grokDelegateInput = {
     .string()
     .optional()
     .describe(
-      "Grok -m slug. Omit for grok-4.6 (CLI default). grok-4.5 is previous gen. Local aliases only if occ_health listed them. Not a Codex or Cursor slug.",
+      "Grok -m slug. Omit for the CLI default. Pass only slugs listed in this tool's Models section or by occ_models.",
     ),
   effort: z
     .enum(["low", "medium", "high", "xhigh", "max"])
@@ -94,7 +105,7 @@ const antigravityDelegateInput = {
     .string()
     .optional()
     .describe(
-      "agy --model slug from `agy models`. e.g. gemini-3.7-flash-high, gemini-3.5-flash-medium, gemini-3.1-pro-high, claude-sonnet-4-6. Unknown slug is a hard ERROR. Not a Codex or Grok slug.",
+      "agy --model slug. Unknown slug is a hard ERROR — pass only slugs listed in this tool's Models section or by occ_models.",
     ),
   effort: z
     .enum(["low", "medium", "high", "xhigh", "max"])
@@ -114,7 +125,13 @@ export function createDefaultDeps(): OccServerDeps {
   return { registry, store };
 }
 
-export function createOccServer(deps: OccServerDeps = createDefaultDeps()): FastMCP {
+export function createOccServer(
+  deps: OccServerDeps = createDefaultDeps(),
+  options: OccServerOptions = {},
+): FastMCP {
+  const catalog = options.catalog ?? loadCatalog();
+  const descriptions = buildDelegateDescriptions(catalog);
+
   const server = new FastMCP({
     name: "orbital-command-centre",
     version: "0.1.0",
@@ -132,8 +149,186 @@ export function createOccServer(deps: OccServerDeps = createDefaultDeps()): Fast
 
   server.tool(
     {
+      name: "occ_models",
+      description:
+        "Show the model catalog OCC uses for delegation: live-probed slugs per agent, defaults, catalog age and staleness. Call this to pick a model, or after scripts/update-models to confirm the refresh.",
+      input: z.object({}),
+    },
+    async () => runModels(catalog),
+  );
+
+  server.tool(
+    {
+      name: "occ_tasks",
+      description:
+        "List delegation tasks known to this server (newest first), including running ones. Use the taskId with occ_cancel. The store is in-memory: history resets when the MCP server restarts.",
+      input: z.object({
+        status: z
+          .array(z.enum(["queued", "running", "succeeded", "failed", "cancelled"]))
+          .optional()
+          .describe("Filter by status, e.g. [\"running\"] to find cancellable tasks."),
+      }),
+    },
+    async (input) => runListTasks(deps.store, { status: input.status }),
+  );
+
+  server.tool(
+    {
+      name: "occ_cancel",
+      description:
+        "Cancel a queued or running delegation by taskId (from occ_tasks). Sends SIGTERM to the agent's whole process group, escalating to SIGKILL after a short grace period. The in-flight delegate call returns status cancelled.",
+      input: z.object({
+        task_id: z.string().min(1).describe("Task id from occ_tasks or a delegate result."),
+      }),
+    },
+    async (input) => runCancel(deps.registry, deps.store, input.task_id),
+  );
+
+  server.tool(
+    {
+      name: "occ_capabilities",
+      description:
+        "Which native tools each agent has (Grok live X search + Imagine media, Antigravity google_search/read_url/browser, Cursor plan mode + model catalog, Codex sandboxed code work) and how to reach them — first-class OCC tool or brief recipe. Call this when deciding which agent fits a job.",
+      input: z.object({}),
+    },
+    async () => ({ agents: nativeCapabilities() }),
+  );
+
+  const grokNativeShared = {
+    cwd: z
+      .string()
+      .optional()
+      .describe("Working directory for the run; media lands under here. Defaults to the server cwd."),
+    model: z.string().optional().describe("Grok -m slug from occ_models. Omit for the CLI default."),
+    effort: z.enum(["low", "medium", "high", "xhigh", "max"]).optional(),
+    timeout_ms: z.number().int().min(1_000).max(1_800_000).optional(),
+  };
+
+  server.tool(
+    {
+      name: "grok_x_search",
+      description:
+        "Search live X posts through Grok's native X tools (x_keyword_search / x_semantic_search) — the real X index, not a web scrape of x.com. Max 10 posts per call; for more, resume the session or narrow the window. Returns date/URL/gist per post. For a full thread afterwards, use delegate_to_grok with the post id.",
+      input: z.object({
+        query: z
+          .string()
+          .min(1)
+          .describe(
+            "Keyword operators (from:user, since:YYYY-MM-DD, OR, \"exact phrase\", -filter:replies) or, with semantic=true, a plain-language description.",
+          ),
+        mode: z.enum(["Latest", "Top"]).optional().describe("Latest = recency (default), Top = engagement."),
+        from_user: z.string().optional().describe("Restrict to one X handle, without @ (e.g. AnthropicAI)."),
+        window_days: z.number().int().min(1).max(30).optional().describe("Recency window. Default 7."),
+        limit: z.number().int().min(1).max(10).optional().describe("Posts to return. Max 10 (tool ceiling)."),
+        semantic: z.boolean().optional().describe("Meaning-based retrieval instead of keyword operators."),
+        exclude_replies: z.boolean().optional().describe("Original posts only (keyword mode)."),
+        ...grokNativeShared,
+      }),
+    },
+    async (input) => {
+      const result = await runGrokXSearch(deps.registry, deps.store, {
+        query: input.query,
+        cwd: input.cwd ?? process.cwd(),
+        mode: input.mode,
+        fromUser: input.from_user,
+        windowDays: input.window_days,
+        limit: input.limit,
+        semantic: input.semantic,
+        excludeReplies: input.exclude_replies,
+        model: input.model,
+        effort: input.effort,
+        timeoutMs: input.timeout_ms,
+      });
+      return { ...result, markdown: formatDelegationMarkdown(result) };
+    },
+  );
+
+  server.tool(
+    {
+      name: "grok_imagine",
+      description:
+        "Generate or edit a still image through Grok's Imagine tools (image_gen / image_edit). For photos, illustrations, characters, scenes — not charts, diagrams, or UI with real copy (build those in code). Returns the saved absolute path in mediaPaths; if mediaSaved is false, generation failed — read output for the reason. Pass source_image to edit an existing image instead of generating.",
+      input: z.object({
+        prompt: z
+          .string()
+          .min(1)
+          .describe("Visual prompt: subject → setting → style → lighting. Prose, 2–5 sentences, no tag salad."),
+        aspect_ratio: z.enum(["1:1", "16:9", "9:16", "3:2", "2:3"]).optional(),
+        source_image: z
+          .string()
+          .optional()
+          .describe("Absolute path (or HTTPS/data URL) of the image to edit. Omit to generate from scratch."),
+        keep_from_source: z
+          .string()
+          .optional()
+          .describe("For edits: what must stay the same (face, composition, …)."),
+        ...grokNativeShared,
+      }),
+    },
+    async (input) => {
+      const result = await runGrokImagine(deps.registry, deps.store, {
+        prompt: input.prompt,
+        cwd: input.cwd ?? process.cwd(),
+        aspectRatio: input.aspect_ratio,
+        sourceImage: input.source_image,
+        keepFromSource: input.keep_from_source,
+        model: input.model,
+        effort: input.effort,
+        timeoutMs: input.timeout_ms,
+      });
+      const mediaPaths = extractSavedPaths(result.output);
+      return {
+        ...result,
+        mediaPaths,
+        mediaSaved: mediaPaths.length > 0,
+        markdown: formatDelegationMarkdown(result),
+      };
+    },
+  );
+
+  server.tool(
+    {
+      name: "grok_video",
+      description:
+        "Animate a still image into a short video through Grok's image_to_video. There is no text-to-video: stage frame 1 first (grok_imagine or an existing file), then animate. One moment, one camera move. Returns the saved absolute path in mediaPaths. If mediaSaved is false, generation failed — read output for the reason (e.g. Zero Data Retention accounts must supply an upload URL the CLI does not expose).",
+      input: z.object({
+        source_image: z.string().min(1).describe("Absolute path to frame 1 (from grok_imagine or on disk)."),
+        prompt: z
+          .string()
+          .optional()
+          .describe("Motion brief: one present-tense moment, one camera move, 1–2 sentences."),
+        duration: z.union([z.literal(6), z.literal(10)]).optional().describe("Seconds. Default 6."),
+        resolution: z.enum(["480p", "720p"]).optional().describe("Default 480p; 720p only when asked."),
+        max_turns: z.number().int().min(2).max(20).optional().describe("Tool-loop cap. Default 8."),
+        ...grokNativeShared,
+      }),
+    },
+    async (input) => {
+      const result = await runGrokVideo(deps.registry, deps.store, {
+        sourceImage: input.source_image,
+        cwd: input.cwd ?? process.cwd(),
+        prompt: input.prompt,
+        duration: input.duration,
+        resolution: input.resolution,
+        maxTurns: input.max_turns,
+        model: input.model,
+        effort: input.effort,
+        timeoutMs: input.timeout_ms,
+      });
+      const mediaPaths = extractSavedPaths(result.output);
+      return {
+        ...result,
+        mediaPaths,
+        mediaSaved: mediaPaths.length > 0,
+        markdown: formatDelegationMarkdown(result),
+      };
+    },
+  );
+
+  server.tool(
+    {
       name: "delegate_to_codex",
-      description: DELEGATE_TO_CODEX_DESCRIPTION,
+      description: descriptions.codex,
       input: z.object(codexDelegateInput),
     },
     async (input) => {
@@ -145,7 +340,7 @@ export function createOccServer(deps: OccServerDeps = createDefaultDeps()): Fast
   server.tool(
     {
       name: "delegate_to_cursor",
-      description: DELEGATE_TO_CURSOR_DESCRIPTION,
+      description: descriptions.cursor,
       input: z.object(cursorDelegateInput),
     },
     async (input) => {
@@ -157,7 +352,7 @@ export function createOccServer(deps: OccServerDeps = createDefaultDeps()): Fast
   server.tool(
     {
       name: "delegate_to_grok",
-      description: DELEGATE_TO_GROK_DESCRIPTION,
+      description: descriptions.grok,
       input: z.object(grokDelegateInput),
     },
     async (input) => {
@@ -169,7 +364,7 @@ export function createOccServer(deps: OccServerDeps = createDefaultDeps()): Fast
   server.tool(
     {
       name: "delegate_to_antigravity",
-      description: DELEGATE_TO_ANTIGRAVITY_DESCRIPTION,
+      description: descriptions.antigravity,
       input: z.object(antigravityDelegateInput),
     },
     async (input) => {

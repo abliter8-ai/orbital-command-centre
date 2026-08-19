@@ -29,6 +29,8 @@ export class UnknownTaskError extends Error {
 
 export class InMemoryTaskStore {
   private readonly tasks = new Map<string, TaskRecord>();
+  private readonly sequence = new Map<string, number>();
+  private nextSeq = 0;
 
   create(input: {
     sessionId: string;
@@ -44,6 +46,7 @@ export class InMemoryTaskStore {
       startedAt: new Date().toISOString(),
     };
     this.tasks.set(record.taskId, record);
+    this.sequence.set(record.taskId, this.nextSeq++);
     return { ...record };
   }
 
@@ -73,6 +76,7 @@ export class InMemoryTaskStore {
       finishedAt: new Date().toISOString(),
     };
     this.tasks.set(record.taskId, record);
+    this.sequence.set(record.taskId, this.nextSeq++);
     return { ...record };
   }
 
@@ -86,6 +90,23 @@ export class InMemoryTaskStore {
   get(taskId: string): TaskRecord | undefined {
     const record = this.tasks.get(taskId);
     return record ? { ...record } : undefined;
+  }
+
+  list(filter?: { status?: TaskStatus | TaskStatus[] }): TaskRecord[] {
+    const wanted = filter?.status === undefined
+      ? undefined
+      : Array.isArray(filter.status)
+        ? filter.status
+        : [filter.status];
+    return [...this.tasks.values()]
+      .filter((record) => wanted === undefined || wanted.includes(record.status))
+      .sort((a, b) => {
+        const byTime = b.startedAt.localeCompare(a.startedAt);
+        // startedAt has millisecond resolution; break ties by insertion order.
+        if (byTime !== 0) return byTime;
+        return (this.sequence.get(b.taskId) ?? 0) - (this.sequence.get(a.taskId) ?? 0);
+      })
+      .map((record) => ({ ...record }));
   }
 
   private require(taskId: string): TaskRecord {

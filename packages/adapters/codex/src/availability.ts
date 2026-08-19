@@ -6,7 +6,7 @@ import { commandForBin } from "@occ/adapter-kit";
 import type { Availability } from "@occ/core";
 import { resolveCodexBin } from "./spawn-args.js";
 
-function readCodexConfigDefaults(): { model?: string; effort?: string } {
+export function readCodexConfigDefaults(): { model?: string; effort?: string } {
   try {
     const text = readFileSync(join(homedir(), ".codex", "config.toml"), "utf8");
     const model = text.match(/^\s*model\s*=\s*"([^"]+)"/m)?.[1];

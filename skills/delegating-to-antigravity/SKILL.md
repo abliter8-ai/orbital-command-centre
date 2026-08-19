@@ -56,7 +56,30 @@ Effort is **also** in some slugs (`-high`/`-medium`/`-low`). `--effort` is `low|
 
 Soft-deny + exit 0 is the failure mode: tests never ran but the tool "succeeded". Check the summary for a soft-deny hint. Prefer `danger-full-access` only in a trusted cwd.
 
-Native web: name `google_search` / `read_url` in the brief. Pre-allow `read_url(*)` in `~/.gemini/antigravity-cli/settings.json` or use danger-full-access. Recipes: `docs/source-refs/agy-tools-ref.md`.
+## Native tools (name them in the brief)
+
+| Tool | Job | Headless caveat |
+| --- | --- | --- |
+| `google_search` | Grounded public web search | Soft-denied unless pre-allowed or danger-full-access |
+| `read_url` | Fetch/process a page | Default Ask → soft-deny. Pre-allow per below |
+| `execute_url` | Drive a live browser (click, type, read DOM) | Same; heavier — prefer `read_url` when static fetch suffices |
+| subagents | Parallel research fan-out | Works headless; ask for it in the brief |
+
+Web actions default to **Ask**, which headless turns into a silent soft-deny
+(exit 0, no work, notice on stderr). Two fixes:
+
+1. Pre-allow in `~/.gemini/antigravity-cli/settings.json`:
+
+```json
+{ "permissions": { "allow": ["read_url(*)"] } }
+```
+
+2. Or `sandbox: "danger-full-access"` (adds `--dangerously-skip-permissions`)
+in a trusted cwd.
+
+Recipes and flag details: `docs/source-refs/agy-tools-ref.md`. For live **X**
+posts or media generation, route to Grok instead (`grok_x_search`,
+`grok_imagine`) — `occ_capabilities` shows who owns what.
 
 ## Resume
 

@@ -19,7 +19,8 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "start": "node dist/stdio.js"
+    "start": "node dist/stdio.js",
+    "refresh-models": "node dist/refresh-models-cli.js"
   },
   "engines": {
     "node": ">=22"
@@ -29,6 +30,7 @@
     "@occ/adapter-codex": "workspace:*",
     "@occ/adapter-cursor": "workspace:*",
     "@occ/adapter-grok": "workspace:*",
+    "@occ/adapter-kit": "workspace:*",
     "@occ/core": "workspace:*",
     "@prefecthq/fastmcp-ts": "^1.5.1",
     "zod": "^4.4.3"

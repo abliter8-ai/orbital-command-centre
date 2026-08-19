@@ -75,4 +75,33 @@ describe("createOccServer in-process", () => {
     });
     expect(JSON.stringify(agyResult)).toMatch(/agy canned/);
   });
+
+  it("exposes occ_models, occ_tasks and occ_cancel", async () => {
+    const handle = new FakeAgentHandle();
+    const registry = new AgentRegistry();
+    registry.register(handle);
+    const store = new InMemoryTaskStore();
+    const server = createOccServer({ registry, store });
+    const client = await Client.connect(server);
+
+    const models = await client.callTool("occ_models", {});
+    expect(JSON.stringify(models)).toMatch(/gpt-5\.6-terra/);
+
+    const created = store.create({
+      sessionId: "sess-1",
+      agentId: "codex",
+      request: { brief: "cancel me" },
+    });
+    store.markRunning(created.taskId);
+
+    const tasks = await client.callTool("occ_tasks", { status: ["running"] });
+    expect(JSON.stringify(tasks)).toContain(created.taskId);
+
+    const cancelled = await client.callTool("occ_cancel", { task_id: created.taskId });
+    expect(JSON.stringify(cancelled)).toMatch(/"ok":true|\\"ok\\":true|ok.*true/s);
+    expect(handle.cancelledTaskIds).toEqual([created.taskId]);
+
+    const again = await client.callTool("occ_cancel", { task_id: created.taskId });
+    expect(JSON.stringify(again)).toMatch(/not_running/);
+  });
 });

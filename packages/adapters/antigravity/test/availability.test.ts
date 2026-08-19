@@ -25,4 +25,21 @@ claude-sonnet-4-6Claude Sonnet 4.6 (Thinking)
       "claude-sonnet-4-6",
     ]);
   });
+
+  it("reads slugs from live tab-separated agy models output", () => {
+    // Captured from `agy models` 1.1.15 on ruin-max.
+    const models = parseAgyModelCatalog(`
+Fetching available models...
+gemini-3.7-flash-high\tGemini 3.7 Flash (High)
+gemini-3.1-pro-low\tGemini 3.1 Pro (Low)
+claude-sonnet-4-6\tClaude Sonnet 4.6 (Thinking)
+gpt-oss-120b-medium\tGPT-OSS 120B (Medium)
+`);
+    expect(models).toEqual([
+      "gemini-3.7-flash-high",
+      "gemini-3.1-pro-low",
+      "claude-sonnet-4-6",
+      "gpt-oss-120b-medium",
+    ]);
+  });
 });

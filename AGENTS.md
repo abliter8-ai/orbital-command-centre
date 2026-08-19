@@ -2,121 +2,89 @@
 
 ## Project Overview
 
-**a8 Orbital Command Centre (OCC)** is a multi-protocol agent control plane and adaptor layer.
+**a8 Orbital Command Centre (OCC)** is a multi-protocol agent control plane and adapter layer.
+It lets a high-level orchestrator (e.g. Claude Code) treat other coding agents as first-class **sub-agents**:
 
-Its primary goal is to let a high-level orchestrator (example Claude Code) treat other coding agents as first-class **sub-agents**. This enables:
+- Token savings (the orchestrator plans & reviews; specialised or cheaper agents implement)
+- Access to models and native tools otherwise unavailable inside a single harness (Grok's live X index and Imagine media generation, Antigravity's grounded Google search, …)
+- Clean interop across three surfaces over one internal contract:
+  1. **MCP** — `delegate_to_*` + `occ_*` tools for Claude Code and other MCP clients
+  2. **ACP** — Agent Client Protocol over stdio for editors (Zed-style)
+  3. **A2A** — Agent-to-Agent JSON-RPC over HTTP for peer discovery and delegation
 
-- Token savings (Claude plans & reviews; specialised or cheaper agents implement)
-- Access to models and runtimes otherwise unavailable inside a single agent
-- Clean interop across three surfaces:
-  1. **MCP** – `delegate_to_*` tools for Claude Code and other MCP clients
-  2. **ACP** – Agent Client Protocol for editors and unified UIs
-  3. **A2A** – Agent-to-Agent protocol for peer discovery and delegation
-
-The internal contract is an **AgentHandle**. MCP, ACP and A2A are façades over the same handles. Adapters turn concrete coding agents (Codex, Cursor, Pi, OpenCode, Grok, …) into AgentHandles.
+The internal contract is an **AgentHandle** (`packages/core`). MCP, ACP and A2A are façades over the same handles. Adapters turn concrete coding-agent CLIs (Codex, Cursor, Grok, Antigravity) into AgentHandles.
 
 ## Current Status
 
-IP-001 through IP-004 are implemented: `@occ/core`, `@occ/adapter-kit`, `@occ/adapter-codex` (`codex exec --json`), `@occ/adapter-cursor` (`cursor-agent -p` — never `agent`, which is Grok on some PATHs), `@occ/adapter-grok` (`grok -p --output-format json`), `@occ/adapter-antigravity` (`agy -p --output-format json` — never `gemini`), and `@occ/mcp-facade` (`occ_health`, `delegate_to_codex`, `delegate_to_cursor`, `delegate_to_grok`, `delegate_to_antigravity`). ACP, A2A, and the control-plane daemon are not built.
+All four adapters and all three surfaces are built and live-verified, plus the control-plane daemon:
 
-Plans live in `docs/`. Study copies of protocol repos live beside this git repo at `../vendored` (gitignored here). Do not add them as a runtime dependency.
-
-## Core Design Principles
-
-1. **AgentHandle is the single internal contract**  
-   Lifecycle, prompting, streaming, cancellation and capabilities live here. Do not leak protocol-specific details into the core.
-
-2. **Façades are thin**  
-   MCP, ACP and A2A should translate to/from AgentHandle. Prefer composition over deep inheritance.
-
-3. **Adapters are thin**  
-   An adapter’s job is to turn one external agent (CLI, ACP server, A2A server, etc.) into an AgentHandle. Reuse vendored code aggressively.
-
-4. **MVP order matters**  
-   Prefer delivering real sub-agent value (MCP tools) before perfect protocol coverage.
-
-5. **Do not reinvent transports**  
-   Use current published SDKs. MCP façade: `@prefecthq/fastmcp-ts` (MCP SDK v2 / 2026-07-28). Claude Code 2.1+ does not fall back to pre-2026-07-28. Study vendored snapshots (ACP TS SDK, a2a-js, a2a-adapter, punkpeye FastMCP); do not depend on the vendored FastMCP tree — it is MCP SDK v1.
+- **MCP façade** (`@occ/mcp-facade`): `occ_health`, `occ_models`, `occ_tasks`, `occ_cancel`, `occ_capabilities`, `delegate_to_{codex,cursor,grok,antigravity}`, and first-class Grok native tools `grok_x_search`, `grok_imagine`, `grok_video`.
+- **ACP** (`@occ/acp`): `occ-acp --agent <id>` over stdio; session modes map to OCC sandboxes.
+- **A2A** (`@occ/a2a`): `occ-a2a --agent <id> --port N`; agent cards generated from the capability profile; `SendMessage` / `GetTask` / `CancelTask` (no streaming — advertised as such).
+- **Control plane** (`@occ/control-plane`): `orbital up|down|status|audit|logs` — one loopback port hosting all agents under `/agents/<id>`, registry (`/v1/registry`), policy mediation (`~/.occ/orbital.json`: `enabled`, `maxSandbox`, `defaultModel`), append-only audit log (`~/.occ/audit.jsonl`).
+- **Model catalog** live-probed from the installed CLIs into `~/.occ/model-catalog.json` (24h staleness self-refresh; `scripts/update-models.sh|ps1`).
 
 ## Package Layout
 
-Present:
-
 ```
 packages/
-  core/                 # AgentHandle, Task/Session model, types, registry
-  adapters/kit/         # shared spawn / cwd (no protocol types)
-  adapters/codex/       # Codex CLI adapter
-  adapters/cursor/      # cursor-agent -p (not `agent`; not ACP)
-  adapters/grok/        # grok -p (not ACP; native X/web/Imagine stay in the brief)
-  adapters/antigravity/ # agy -p (not gemini CLI; web tools stay in the brief)
-  mcp-facade/           # FastMCP tools (delegate_to_*)
+  core/                 # AgentHandle, Task/Session model, registry, task store,
+                        # capabilities map, model catalog (no protocol or CLI deps)
+  adapters/kit/         # shared spawn / cwd / process-tree kill (no protocol types)
+  adapters/codex/       # codex exec --json
+  adapters/cursor/      # cursor-agent -p (never `agent` — that name is Grok on some PATHs)
+  adapters/grok/        # grok -p --output-format json (+ native X / Imagine / video briefs)
+  adapters/antigravity/ # agy -p --output-format json (never `gemini`)
+  mcp-facade/           # FastMCP tools for Claude Code
+  acp/                  # ACP server over stdio (@agentclientprotocol/sdk)
+  a2a/                  # A2A server over node:http (@a2a-js/sdk, no express)
+  control-plane/        # orbital daemon: registry, policy, audit, lifecycle
+skills/                 # Claude Code skills (delegating-to-*, choosing-the-right-agent)
+scripts/                # install.sh|ps1, update-models.sh|ps1
 ```
 
-Planned, do not invent early:
+Keep `core` free of concrete protocol and CLI dependencies. Façades depend on adapters, never the reverse.
 
-```
-packages/acp
-packages/a2a
-packages/adapters/{opencode,pi,…}
-packages/control-plane
-```
+## Core Design Principles
 
-Keep the core package free of concrete protocol or CLI dependencies.
+1. **AgentHandle is the single internal contract.** Lifecycle, prompting, cancellation and capabilities live here. Do not leak protocol-specific details into core.
+2. **Façades are thin.** MCP, ACP, A2A and the daemon translate to/from AgentHandle. Shared domain data (capabilities, catalog) lives in core, not in a façade.
+3. **Adapters are thin.** One external CLI → one AgentHandle. Shared spawn/kill/parse logic goes in `adapters/kit`.
+4. **Do not reinvent transports.** Use published SDKs: `@prefecthq/fastmcp-ts` (MCP), `@agentclientprotocol/sdk` (ACP), `@a2a-js/sdk` (A2A). Vendored snapshots beside this repo (`../vendored`) are for study only — never a runtime dependency.
+5. **Honesty over gloss.** If a capability is not streaming, advertise `streaming: false`. If a native tool fails server-side (e.g. ZDR Grok accounts and video), return the reason — never fake success.
 
-## Priority Order for Work
+## Adapter Invariants (hard-won — do not regress)
 
-When deciding what to implement or improve:
+- OCC never passes `--dangerously-bypass-approvals-and-sandbox` (Codex). `danger-full-access` maps to each CLI's own documented full-access flags only.
+- Codex write path is `--approve-for-me` (0.148 refuses `--sandbox` combined with it).
+- Cursor write path is `cursor-agent -p --force --trust` with stream-json; read-only is `--mode ask`. Spawned Cursor processes set `AGENT_CLI_CREDENTIAL_STORE=file` (locked macOS keychain workaround).
+- Grok headless is `grok --no-leader -p --output-format json --verbatim`; write path adds `--always-approve`; OS `--sandbox` is **not** passed (hangs 1.0.5). X-search/Imagine briefs must not run under `read-only` (tool approval hang) — the first-class tools handle this.
+- Antigravity web tools soft-deny without `permissions.allow` rules in the user's settings; document, don't work around.
+- Cancellation and timeout kill the whole process group (SIGTERM → 4s grace → SIGKILL; `taskkill /T /F` on Windows) via `adapters/kit`.
+- Availability probes are cheap and read-only (`--version`, auth status) — never spawn a prompt turn to probe.
 
-1. **Core AgentHandle + Task/Session model**
-2. **One solid adapter** (prefer Codex, Grok or Cursor)
-3. **MCP façade** exposing `delegate_to_<agent>` tools that Claude Code can call
-4. Second adapter + basic local registry
-5. A2A server surface on the same handles
-6. Full control-plane daemon (lifecycle, isolation, permissions, multi-session)
+## Build, Test, Verify
+
+- Node ≥22, pnpm 10. `pnpm install && pnpm build` (topological via `pnpm -r build`).
+- **Run tests from the repo root**: `pnpm test` (vitest include paths are root-relative; per-package `vitest run` finds nothing).
+- Entry points: MCP `packages/mcp-facade/dist/stdio.js` · ACP `packages/acp/dist/stdio.js` · A2A `packages/a2a/dist/server-cli.js` · daemon `packages/control-plane/dist/cli.js`.
+- Live verification convention: real CLI round-trips ("Reply with exactly: PONG") per surface, plus evidence in the commit/PR description.
 
 ## Rules for Agents Working in This Repo
 
-- Prefer extending the existing architecture over introducing parallel abstractions.
-- When adding a new target agent, implement an adapter that satisfies `AgentHandle` rather than special-casing it in the façades.
-- Keep the MCP tools ergonomic for Claude Code: clear names, good descriptions, structured results that are easy to review.
-- Reuse and study the vendored repositories instead of copying large amounts of protocol code.
-- Preserve isolation: delegated agents should ideally run in their own context / worktree / sandbox where practical.
-- Document any new public tool or AgentHandle method clearly so other agents (and future OCC itself) can use it.
-
-## Coding Conventions
-
-- Language: TypeScript preferred for the control plane and façades (matches the majority of the vendored SDKs).
-- Keep public interfaces small and stable.
-- Prefer explicit types over heavy inference for the core contract.
-- Tests should focus on the AgentHandle contract and the MCP tool path first.
-- Avoid large “god” modules; keep adapters and transports focused.
-
-## Documentation Standards
-- All major work requires a structured implementation plan written to 'docs/b-implementation_plans'
-- When that work is complete, you write a Completion Report to 'docs/c-completion-reports'
-- If you are unable to complete a task or you are asked to give a handoff write to 'docs/c-completion-reports'
-- The user will sometimes provide unstructured content in 'docs/a-ideas' - these are not authorised or approved plans, they are ideas/patterns/or information for you to consider when developing a plan.
+- Extend the existing architecture; do not introduce parallel abstractions (new agent → new adapter satisfying `AgentHandle`; new surface → new façade over the registry).
+- Keep MCP tools ergonomic for orchestrators: clear names, honest descriptions, structured results that are easy to review.
+- New public tool, handle method, or daemon route → document it in the README section for that surface.
+- Sandbox semantics are a security boundary: policy caps in the control plane and per-call `sandbox` in MCP/ACP/A2A must agree. Never widen a caller's requested sandbox.
+- Preserve the audit trail: control-plane-mediated delegations must land in `~/.occ/audit.jsonl`, rejections included.
 
 ## Useful Context
 
-- README.md contains the high-level vision, loop, and roadmap.
-- Docs: `docs/a-ideas`, `docs/b-implementation_plans`, `docs/c-completion-reports`, `docs/d-handoffs`.
-- Vendored references live under `../vendored` (workbench, not in this git repo). Study them before inventing new protocol handling.
-- The logo and branding use a pixel-art satellite + “OCA” motif.
-- Build/test: `pnpm install && pnpm test && pnpm build`. MCP entry: `packages/mcp-facade/dist/stdio.js`.
-
-## What Success Looks Like for the First Milestone
-
-Claude Code (or any MCP client) can:
-
-1. Call a tool such as `delegate_to_codex`, `delegate_to_cursor`, `delegate_to_grok`, or `delegate_to_antigravity` with a clear brief.
-2. The corresponding agent runs (via the adapter).
-3. A structured result (or useful summary + diff) is returned.
-4. Claude can review and continue.
-
-Once that loop is reliable, the same AgentHandles can be exposed over ACP and A2A.
+- `README.md` — vision, install, the Claude Code loop, per-surface usage, roadmap.
+- `skills/` — the orchestration playbooks Claude Code loads (`choosing-the-right-agent` is the routing meta-skill).
+- Vendored protocol references may exist beside this repo at `../vendored` (gitignored) — study before inventing protocol handling.
+- Branding: pixel-art satellite + wordmark in `assets/` (transparent backgrounds — theme-safe; `orbital-logo-black.PNG` is opaque black, avoid on the web). Signature colour is **red `#ff093a`** — use it for badges, rules, and generated brand assets.
 
 ---
 
-When in doubt, optimise for a clean AgentHandle and a working MCP sub-agent path.
+When in doubt, optimise for a clean AgentHandle and a working, reviewable delegation path.

@@ -5,4 +5,12 @@ export {
   summariseOutput,
 } from "./constants.js";
 export { resolveCwd, validateCwd } from "./cwd.js";
-export { commandForBin, runChild, type RunChildOptions, type RunChildOutput } from "./run-child.js";
+export {
+  DEFAULT_KILL_GRACE_MS,
+  buildSpawnOptions,
+  commandForBin,
+  killTree,
+  runChild,
+  type RunChildOptions,
+  type RunChildOutput,
+} from "./run-child.js";

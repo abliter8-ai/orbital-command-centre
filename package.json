@@ -9,9 +9,13 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "pnpm --filter @occ/core build && pnpm --filter @occ/adapter-kit build && pnpm --filter @occ/adapter-codex exec tsc -p tsconfig.json --noEmit && pnpm --filter @occ/adapter-cursor exec tsc -p tsconfig.json --noEmit && pnpm --filter @occ/adapter-grok exec tsc -p tsconfig.json --noEmit && pnpm --filter @occ/adapter-antigravity exec tsc -p tsconfig.json --noEmit && pnpm --filter @occ/adapter-codex build && pnpm --filter @occ/adapter-cursor build && pnpm --filter @occ/adapter-grok build && pnpm --filter @occ/adapter-antigravity build && pnpm --filter @occ/mcp-facade exec tsc -p tsconfig.json --noEmit",
-    "build": "pnpm --filter @occ/core build && pnpm --filter @occ/adapter-kit build && pnpm --filter @occ/adapter-codex build && pnpm --filter @occ/adapter-cursor build && pnpm --filter @occ/adapter-grok build && pnpm --filter @occ/adapter-antigravity build && pnpm --filter @occ/mcp-facade build",
-    "occ-mcp": "node packages/mcp-facade/dist/stdio.js"
+    "typecheck": "pnpm -r exec tsc -p tsconfig.json --noEmit",
+    "build": "pnpm -r build",
+    "occ-mcp": "node packages/mcp-facade/dist/stdio.js",
+    "occ-refresh-models": "node packages/mcp-facade/dist/refresh-models-cli.js",
+    "occ-acp": "node packages/acp/dist/stdio.js",
+    "occ-a2a": "node packages/a2a/dist/server-cli.js",
+    "orbital": "node packages/control-plane/dist/cli.js"
   },
   "devDependencies": {
     "@types/node": "^26.2.0",
