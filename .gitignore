@@ -21,6 +21,10 @@ coverage/
 # Vendored integration repositories
 vendored/
 
+# Internal maintainer workflow (ideas, implementation plans, completion
+# reports, handoffs) — local only, not shipped with the repo
+docs/
+
 # Local environment and editor files
 .env
 .env.*
