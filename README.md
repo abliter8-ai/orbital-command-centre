@@ -26,7 +26,7 @@ You either stay inside one ecosystem or become a human clipboard.
 
 OCC provides a unified control surface so that:
 
-- Claude Code can `delegate_to_codex`, `delegate_to_cursor`, `delegate_to_opencode`, etc.
+- Claude Code can `delegate_to_codex`, `delegate_to_cursor`, `delegate_to_grok`, `delegate_to_opencode`, etc.
 - Editors and UIs can drive the same agents over **ACP**
 - Agents can discover and talk to each other over **A2A**
 - Everything shares one internal runtime model, one registry, and one permission story
@@ -66,7 +66,7 @@ MCP, ACP and A2A are just different ways of talking to the same handles.
 | Cursor       | ACP / A2A / headless              | Also surfaces Grok models      |
 | OpenCode     | Headless / A2A                    | Model-flexible                 |
 | Pi           | a2a-adapter style                 | Lightweight                    |
-| Grok         | Via Cursor or Grok Build CLI      |                               |
+| Grok         | Headless `grok -p` (OCC adapter)  | Native X / web / Imagine in brief |
 
 More adapters can be added without changing the control plane.
 
@@ -74,13 +74,13 @@ More adapters can be added without changing the control plane.
 
 ## Status
 
-**IP-001 + IP-002 landed.** Claude Code can call `occ_health`, `delegate_to_codex`, and `delegate_to_cursor` over MCP stdio. ACP, A2A, and the control-plane daemon are not built yet.
+**IP-001 + IP-002 + IP-003 landed.** Claude Code can call `occ_health`, `delegate_to_codex`, `delegate_to_cursor`, and `delegate_to_grok` over MCP stdio. ACP, A2A, and the control-plane daemon are not built yet.
 
 ---
 
 ## Claude Code loop
 
-Requires Node ≥22, pnpm 10, and the local CLIs you want to delegate to (`codex`, `agent`).
+Requires Node ≥22, pnpm 10, and the local CLIs you want to delegate to (`codex`, `cursor-agent`, `grok`). Never use `agent` for Cursor — that name is Grok on PATHs that include `~/.grok/bin`. Override Grok with `GROK_BIN`.
 
 ```bash
 pnpm install
@@ -97,11 +97,11 @@ claude mcp add orbital -- node "$(pwd)/packages/mcp-facade/dist/stdio.js"
 Or copy `.mcp.json` into the workspace you want Claude to drive. Then:
 
 1. Call `occ_health`. Confirm the target CLI is `available` and `authenticated`.
-2. Call `delegate_to_codex` or `delegate_to_cursor` with a **self-contained brief**: goal, constraints, files in play, definition of done. Pass `cwd` if the server was not launched in that repo. Use `sandbox: "read-only"` for investigation.
+2. Call `delegate_to_codex`, `delegate_to_cursor`, or `delegate_to_grok` with a **self-contained brief**: goal, constraints, files in play, definition of done. Pass `cwd` if the server was not launched in that repo. Use `sandbox: "read-only"` for investigation.
 3. Review the structured result (status, summary, files changed, `sessionId`).
 4. To continue the same thread, pass that `sessionId` as `resume_session_id`.
 
-Codex default write path is `--approve-for-me` (0.148 refuses `--sandbox` together with that flag). Cursor write path is `agent -p --force --trust` with stream-json; read-only is `--mode ask`. OCC never passes `--dangerously-bypass-approvals-and-sandbox`. Spawned Cursor processes set `AGENT_CLI_CREDENTIAL_STORE=file` so a locked macOS login keychain does not fail the CLI.
+Codex default write path is `--approve-for-me` (0.148 refuses `--sandbox` together with that flag). Cursor write path is `cursor-agent -p --force --trust` with stream-json; read-only is `--mode ask`. Grok is `grok --no-leader -p --output-format json --verbatim`. Write path adds `--always-approve`. OS `--sandbox` is not passed (hangs grok 1.0.5 headless). OCC never passes `--dangerously-bypass-approvals-and-sandbox`. Spawned Cursor processes set `AGENT_CLI_CREDENTIAL_STORE=file` so a locked macOS login keychain does not fail the CLI. Override binaries with `CODEX_BIN` / `CURSOR_BIN` / `GROK_BIN`. Grok-native X / web / Imagine stay inside Grok — name them in the brief, do not expect OCC tools for them.
 
 ---
 
@@ -112,8 +112,9 @@ packages/
   core/                 # AgentHandle, Task/Session model, types
   adapters/kit/         # shared spawn / cwd
   adapters/codex/       # codex exec
-  adapters/cursor/      # agent -p
-  mcp-facade/           # occ_health, delegate_to_codex, delegate_to_cursor
+  adapters/cursor/      # cursor-agent -p
+  adapters/grok/        # grok -p
+  mcp-facade/           # occ_health, delegate_to_codex, delegate_to_cursor, delegate_to_grok
 ```
 
 Still planned, not in this repo yet: `packages/acp`, `packages/a2a`, more adapters, `packages/control-plane`.
@@ -123,7 +124,7 @@ Still planned, not in this repo yet: `packages/acp`, `packages/a2a`, more adapte
 ## Quick Mental Model for Users
 
 1. Claude analyses the task and writes a precise brief.
-2. It calls an OCC tool (`delegate_to_codex`, `delegate_to_cursor`, …).
+2. It calls an OCC tool (`delegate_to_codex`, `delegate_to_cursor`, `delegate_to_grok`, …).
 3. The external agent runs in its own context / sandbox / worktree.
 4. Claude receives the result (or diff) and continues as the reviewer / integrator.
 
@@ -137,7 +138,8 @@ Same agents remain available to any ACP client or A2A peer.
 - [x] Core `AgentHandle` interface + task model
 - [x] First working adapter (Codex via `codex exec`)
 - [x] MCP façade (`delegate_to_codex`)
-- [x] Second adapter (Cursor via `agent -p`) + in-memory registry
+- [x] Second adapter (Cursor via `cursor-agent -p`) + in-memory registry
+- [x] Third adapter (Grok via `grok -p`)
 - [ ] A2A server surface on the same handles
 - [ ] Full control-plane daemon (lifecycle, isolation, permissions)
 - [ ] Polish, docs, and more adapters

@@ -1,0 +1,4 @@
+export { GrokAgentHandle } from "./grok-handle.js";
+export { buildHeadlessArgs, grokSandboxFlag, grokSpawnEnv, resolveGrokBin } from "./spawn-args.js";
+export { parseGrokJson } from "./parse-json.js";
+export { probeGrokAvailability, parseGrokModelCatalog, isGrokLoggedIn } from "./availability.js";

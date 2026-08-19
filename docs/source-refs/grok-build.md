@@ -1,5 +1,7 @@
 #### CLI
 
+> Related: [grok -p + native X search](./grok-p-x-search.md) — live X posts. [grok -p + web_search / web_fetch](./grok-p-web-search.md) — open web. [grok -p + Imagine](./grok-p-imagine.md) — image_gen / image_edit / image_to_video / reference_to_video.
+
 # Headless & Scripting
 
 ## Headless mode

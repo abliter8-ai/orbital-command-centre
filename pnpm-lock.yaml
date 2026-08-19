@@ -36,6 +36,15 @@ importers:
         specifier: workspace:*
         version: link:../../core
 
+  packages/adapters/grok:
+    dependencies:
+      '@occ/adapter-kit':
+        specifier: workspace:*
+        version: link:../kit
+      '@occ/core':
+        specifier: workspace:*
+        version: link:../../core
+
   packages/adapters/kit: {}
 
   packages/core: {}
@@ -48,6 +57,9 @@ importers:
       '@occ/adapter-cursor':
         specifier: workspace:*
         version: link:../adapters/cursor
+      '@occ/adapter-grok':
+        specifier: workspace:*
+        version: link:../adapters/grok
       '@occ/core':
         specifier: workspace:*
         version: link:../core

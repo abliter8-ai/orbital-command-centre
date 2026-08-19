@@ -1,4 +1,4 @@
-export type AgentId = "codex" | "cursor";
+export type AgentId = "codex" | "cursor" | "grok";
 
 export type TaskStatus =
   | "queued"
@@ -8,6 +8,8 @@ export type TaskStatus =
   | "cancelled";
 
 export type SandboxMode = "read-only" | "workspace-write" | "danger-full-access";
+
+export type ReasoningEffort = "low" | "medium" | "high" | "xhigh" | "max";
 
 export interface AgentCapabilities {
   streaming: boolean;
@@ -40,6 +42,7 @@ export interface PromptRequest {
   brief: string;
   sandbox?: SandboxMode;
   timeoutMs?: number;
+  effort?: ReasoningEffort;
 }
 
 export interface FileChange {

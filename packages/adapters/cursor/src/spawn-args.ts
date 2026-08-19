@@ -38,7 +38,8 @@ export function buildHeadlessArgs(opts: CursorHeadlessArgOptions): string[] {
 }
 
 export function resolveCursorBin(): string {
-  return process.env.CURSOR_BIN?.trim() || "agent";
+  // Never fall back to `agent`: Grok CLI also ships that name (~/.grok/bin/agent).
+  return process.env.CURSOR_BIN?.trim() || "cursor-agent";
 }
 
 export function cursorSpawnEnv(base: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {

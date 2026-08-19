@@ -17,7 +17,7 @@ The internal contract is an **AgentHandle**. MCP, ACP and A2A are façades over 
 
 ## Current Status
 
-IP-001 and IP-002 are implemented: `@occ/core`, `@occ/adapter-kit`, `@occ/adapter-codex` (`codex exec --json`), `@occ/adapter-cursor` (`agent -p`), and `@occ/mcp-facade` (`occ_health`, `delegate_to_codex`, `delegate_to_cursor`). ACP, A2A, and the control-plane daemon are not built.
+IP-001, IP-002, and IP-003 are implemented: `@occ/core`, `@occ/adapter-kit`, `@occ/adapter-codex` (`codex exec --json`), `@occ/adapter-cursor` (`cursor-agent -p` — never `agent`, which is Grok on some PATHs), `@occ/adapter-grok` (`grok -p --output-format json` — never `agent` as a Cursor binary), and `@occ/mcp-facade` (`occ_health`, `delegate_to_codex`, `delegate_to_cursor`, `delegate_to_grok`). ACP, A2A, and the control-plane daemon are not built.
 
 Plans live in `docs/`. Study copies of protocol repos live beside this git repo at `../vendored` (gitignored here). Do not add them as a runtime dependency.
 
@@ -47,8 +47,9 @@ packages/
   core/                 # AgentHandle, Task/Session model, types, registry
   adapters/kit/         # shared spawn / cwd (no protocol types)
   adapters/codex/       # Codex CLI adapter
-  adapters/cursor/      # Cursor agent CLI (headless -p, not ACP)
-  mcp-facade/           # FastMCP tools (delegate_to_codex, delegate_to_cursor)
+  adapters/cursor/      # cursor-agent -p (not `agent`; not ACP)
+  adapters/grok/        # grok -p (not ACP; native X/web/Imagine stay in the brief)
+  mcp-facade/           # FastMCP tools (delegate_to_codex, delegate_to_cursor, delegate_to_grok)
 ```
 
 Planned, do not invent early:
@@ -56,7 +57,7 @@ Planned, do not invent early:
 ```
 packages/acp
 packages/a2a
-packages/adapters/{cursor,opencode,pi,…}
+packages/adapters/{opencode,pi,…}
 packages/control-plane
 ```
 
@@ -108,7 +109,7 @@ When deciding what to implement or improve:
 
 Claude Code (or any MCP client) can:
 
-1. Call a tool such as `delegate_to_codex` or `delegate_to_cursor` with a clear brief.
+1. Call a tool such as `delegate_to_codex`, `delegate_to_cursor`, or `delegate_to_grok` with a clear brief.
 2. The corresponding agent runs (via the adapter).
 3. A structured result (or useful summary + diff) is returned.
 4. Claude can review and continue.

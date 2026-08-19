@@ -29,7 +29,12 @@ export class FakeAgentHandle implements AgentHandle {
 
   constructor(overrides: Partial<DelegationResult> = {}) {
     this.agentId = overrides.agentId ?? "codex";
-    this.displayName = this.agentId === "cursor" ? "Fake Cursor" : "Fake Codex";
+    this.displayName =
+      this.agentId === "cursor"
+        ? "Fake Cursor"
+        : this.agentId === "grok"
+          ? "Fake Grok"
+          : "Fake Codex";
     this.canned = {
       taskId: newTaskId(),
       sessionId: "fake-session",
@@ -58,8 +63,8 @@ export class FakeAgentHandle implements AgentHandle {
       available: this.available,
       authenticated: this.authenticated,
       detail: this.available
-        ? "Fake Codex is injected for tests."
-        : "Fake Codex marked unavailable.",
+        ? `${this.displayName} is injected for tests.`
+        : `${this.displayName} marked unavailable.`,
       version: "fake-0",
     };
   }

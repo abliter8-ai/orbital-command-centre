@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { buildHeadlessArgs } from "../src/spawn-args.js";
+import { afterEach, describe, expect, it } from "vitest";
+import { buildHeadlessArgs, resolveCursorBin } from "../src/spawn-args.js";
 
 describe("buildHeadlessArgs", () => {
   it("maps read-only to ask mode + json", () => {
@@ -53,6 +53,17 @@ describe("buildHeadlessArgs", () => {
     expect(args).toContain("--sandbox");
     expect(args[args.indexOf("--sandbox") + 1]).toBe("disabled");
     expect(args[args.indexOf("--resume") + 1]).toBe("sess-123");
+  });
+
+  it("defaults to cursor-agent, not agent (Grok collision)", () => {
+    const previous = process.env.CURSOR_BIN;
+    delete process.env.CURSOR_BIN;
+    try {
+      expect(resolveCursorBin()).toBe("cursor-agent");
+    } finally {
+      if (previous === undefined) delete process.env.CURSOR_BIN;
+      else process.env.CURSOR_BIN = previous;
+    }
   });
 
   it("does not resume pending session ids", () => {

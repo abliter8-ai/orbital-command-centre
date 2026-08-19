@@ -29,7 +29,8 @@ describe("buildCodexExecArgs", () => {
       cwd: "/tmp/repo",
       brief: "continue",
       sandbox: "read-only",
-      model: "gpt-5.4",
+      model: "gpt-5.6-luna",
+      effort: "high",
       resumeSessionId: "0199a213-81c0-7800-8aa1-bbab2a035a53",
       lastMessagePath: "/tmp/last.txt",
     });
@@ -39,9 +40,11 @@ describe("buildCodexExecArgs", () => {
       "0199a213-81c0-7800-8aa1-bbab2a035a53",
     ]);
     expect(args).toContain("-m");
-    expect(args).toContain("gpt-5.4");
+    expect(args).toContain("gpt-5.6-luna");
     expect(args).toContain("--sandbox");
     expect(args).toContain("read-only");
+    expect(args).toContain("-c");
+    expect(args).toContain('model_reasoning_effort="high"');
     expect(args).not.toContain("--approve-for-me");
     expect(args).not.toContain("--full-auto");
     expect(args).not.toContain("--dangerously-bypass-approvals-and-sandbox");

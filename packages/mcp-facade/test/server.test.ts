@@ -41,5 +41,21 @@ describe("createOccServer in-process", () => {
       brief: "use cursor",
     });
     expect(JSON.stringify(cursorResult)).toMatch(/cursor canned/);
+
+    const grok = new FakeAgentHandle({
+      agentId: "grok",
+      summary: "grok canned",
+      output: "grok canned",
+    });
+    const three = new AgentRegistry();
+    three.register(handle);
+    three.register(cursor);
+    three.register(grok);
+    const triple = createOccServer({ registry: three, store: new InMemoryTaskStore() });
+    const tripleClient = await Client.connect(triple);
+    const grokResult = await tripleClient.callTool("delegate_to_grok", {
+      brief: "use grok",
+    });
+    expect(JSON.stringify(grokResult)).toMatch(/grok canned/);
   });
 });

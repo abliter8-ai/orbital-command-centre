@@ -43,18 +43,26 @@ export async function probeCursorAvailability(): Promise<Availability> {
   }
 
   const status = await run(bin, ["status"]);
-  const statusText = `${status.stdout}\n${status.stderr}`;
-  const notSignedIn =
-    /not signed in|not logged in|unauthenticated|please sign in/i.test(statusText);
-  const loggedIn = /logged in/i.test(statusText);
-  const authenticated = !notSignedIn && (loggedIn || status.code === 0);
+  const authenticated = isCursorLoggedIn(status.stdout, status.stderr);
+  const versionLabel = version.stdout.trim();
+  const versionId = versionLabel.split(/\s+/).at(-1);
+  const modelHint =
+    "bin=cursor-agent · default model=auto · slugs: auto|gpt-5|sonnet-4-thinking · effort via model[effort=high] · catalog: `cursor-agent models` (needs API key)";
 
   return {
     available: true,
     authenticated,
     detail: authenticated
-      ? `${version.stdout.trim()} — ${status.stdout.trim() || "authenticated"}`
-      : `${version.stdout.trim()} — not signed in. Run \`agent login\`.`,
-    version: version.stdout.trim().split(/\s+/).at(-1),
+      ? `${versionLabel} — ${status.stdout.trim() || "authenticated"} · ${modelHint}`
+      : `${versionLabel} — not signed in. Run \`AGENT_CLI_CREDENTIAL_STORE=file cursor-agent login\`. ${modelHint}`,
+    version: versionId,
   };
+}
+
+export function isCursorLoggedIn(stdout: string, stderr: string): boolean {
+  const text = `${stdout}\n${stderr}`;
+  if (/not signed in|not logged in|unauthenticated|please sign in|authentication required/i.test(text)) {
+    return false;
+  }
+  return /✓\s*logged in|logged in as/i.test(text);
 }

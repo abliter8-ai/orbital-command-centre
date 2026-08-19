@@ -1,5 +1,5 @@
 import { isPendingSessionId } from "@occ/core";
-import type { SandboxMode } from "@occ/core";
+import type { ReasoningEffort, SandboxMode } from "@occ/core";
 
 export const DEFAULT_SANDBOX: SandboxMode = "workspace-write";
 export { DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS } from "@occ/adapter-kit";
@@ -9,6 +9,7 @@ export interface CodexExecArgOptions {
   brief: string;
   sandbox: SandboxMode;
   model?: string;
+  effort?: ReasoningEffort;
   resumeSessionId?: string;
   lastMessagePath: string;
 }
@@ -28,6 +29,9 @@ export function buildCodexExecArgs(opts: CodexExecArgOptions): string[] {
   }
   if (opts.model) {
     args.push("-m", opts.model);
+  }
+  if (opts.effort) {
+    args.push("-c", `model_reasoning_effort="${opts.effort}"`);
   }
   args.push("-o", opts.lastMessagePath, "--", opts.brief);
   return args;

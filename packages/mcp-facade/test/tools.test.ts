@@ -46,6 +46,15 @@ describe("runHealth / runDelegateToCodex", () => {
     expect(result.status).toBe("succeeded");
   });
 
+  it("delegates to an injected grok handle", async () => {
+    const { registry, store } = deps(new FakeAgentHandle({ agentId: "grok" }));
+    const result = await runDelegate(registry, store, "grok", {
+      brief: "search X then summarise",
+    });
+    expect(result.agentId).toBe("grok");
+    expect(result.status).toBe("succeeded");
+  });
+
   it("fails fast when the handle is unavailable", async () => {
     const handle = new FakeAgentHandle();
     handle.available = false;

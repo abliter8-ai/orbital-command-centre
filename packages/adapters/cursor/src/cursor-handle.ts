@@ -109,7 +109,7 @@ export class CursorAgentHandle implements AgentHandle {
         const result = this.fail(task.taskId, session, started, {
           code: "spawn_failed",
           message: ran.spawnError,
-          hint: "Install the Cursor agent CLI and ensure `agent` is on PATH, or set CURSOR_BIN.",
+          hint: "Install the Cursor CLI (`cursor-agent` on PATH) or set CURSOR_BIN.",
         });
         this.store.complete(task.taskId, result);
         return result;
@@ -153,7 +153,7 @@ export class CursorAgentHandle implements AgentHandle {
           code: "agent_failed",
           message: parsed.errorMessage ?? "Cursor failed.",
           hint: login
-            ? "Unlock the login keychain or run `agent login`. OCC sets AGENT_CLI_CREDENTIAL_STORE=file for spawned agent processes."
+            ? "Unlock the login keychain or run `AGENT_CLI_CREDENTIAL_STORE=file cursor-agent login`. Do not use `agent` — that name is Grok on some PATHs."
             : undefined,
         });
         result.output = parsed.output;

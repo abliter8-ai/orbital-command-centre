@@ -7,6 +7,7 @@ export type {
   DelegationResult,
   FileChange,
   PromptRequest,
+  ReasoningEffort,
   SandboxMode,
   Session,
   SessionOptions,

@@ -1,7 +1,21 @@
 import { spawn } from "node:child_process";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import { readFileSync } from "node:fs";
 import { commandForBin } from "@occ/adapter-kit";
 import type { Availability } from "@occ/core";
 import { resolveCodexBin } from "./spawn-args.js";
+
+function readCodexConfigDefaults(): { model?: string; effort?: string } {
+  try {
+    const text = readFileSync(join(homedir(), ".codex", "config.toml"), "utf8");
+    const model = text.match(/^\s*model\s*=\s*"([^"]+)"/m)?.[1];
+    const effort = text.match(/^\s*model_reasoning_effort\s*=\s*"([^"]+)"/m)?.[1];
+    return { model, effort };
+  } catch {
+    return {};
+  }
+}
 
 function runVersion(bin: string): Promise<{ code: number | null; stdout: string; stderr: string }> {
   return new Promise((resolve) => {
@@ -44,10 +58,16 @@ export async function probeCodexAvailability(): Promise<Availability> {
     };
   }
   const version = result.stdout.trim().split(/\s+/).at(-1);
+  const defaults = readCodexConfigDefaults();
+  const defaultBits = [
+    defaults.model ? `config model=${defaults.model}` : undefined,
+    defaults.effort ? `effort=${defaults.effort}` : undefined,
+    "slugs: gpt-5.6-sol|gpt-5.6-terra|gpt-5.6-luna|gpt-5.6|gpt-5.5",
+  ].filter(Boolean);
   return {
     available: true,
     authenticated: true,
-    detail: result.stdout.trim() || `${bin} is available`,
+    detail: [result.stdout.trim() || `${bin} is available`, ...defaultBits].join(" · "),
     version,
   };
 }

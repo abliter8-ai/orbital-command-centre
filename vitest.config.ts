@@ -10,6 +10,7 @@ export default defineConfig({
       "@occ/adapter-kit": `${root}packages/adapters/kit/src/index.ts`,
       "@occ/adapter-codex": `${root}packages/adapters/codex/src/index.ts`,
       "@occ/adapter-cursor": `${root}packages/adapters/cursor/src/index.ts`,
+      "@occ/adapter-grok": `${root}packages/adapters/grok/src/index.ts`,
     },
   },
   test: {
