@@ -13,6 +13,10 @@ pnpm-debug.log*
 dist/
 build/
 coverage/
+*.tsbuildinfo
+
+# Isolated worktrees
+.worktrees/
 
 # Vendored integration repositories
 vendored/
