@@ -18,6 +18,15 @@ importers:
         specifier: ^4.1.11
         version: 4.1.11(@types/node@26.2.0)(vite@8.2.1(@types/node@26.2.0)(yaml@2.9.0))
 
+  packages/adapters/antigravity:
+    dependencies:
+      '@occ/adapter-kit':
+        specifier: workspace:*
+        version: link:../kit
+      '@occ/core':
+        specifier: workspace:*
+        version: link:../../core
+
   packages/adapters/codex:
     dependencies:
       '@occ/adapter-kit':
@@ -51,6 +60,9 @@ importers:
 
   packages/mcp-facade:
     dependencies:
+      '@occ/adapter-antigravity':
+        specifier: workspace:*
+        version: link:../adapters/antigravity
       '@occ/adapter-codex':
         specifier: workspace:*
         version: link:../adapters/codex

@@ -5,5 +5,6 @@ export {
   runDelegateToCodex,
   runDelegateToCursor,
   runDelegateToGrok,
+  runDelegateToAntigravity,
   runHealth,
 } from "./tools.js";

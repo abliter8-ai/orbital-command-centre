@@ -34,7 +34,9 @@ export class FakeAgentHandle implements AgentHandle {
         ? "Fake Cursor"
         : this.agentId === "grok"
           ? "Fake Grok"
-          : "Fake Codex";
+          : this.agentId === "antigravity"
+            ? "Fake Antigravity"
+            : "Fake Codex";
     this.canned = {
       taskId: newTaskId(),
       sessionId: "fake-session",

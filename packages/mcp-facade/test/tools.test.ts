@@ -55,6 +55,15 @@ describe("runHealth / runDelegateToCodex", () => {
     expect(result.status).toBe("succeeded");
   });
 
+  it("delegates to an injected antigravity handle", async () => {
+    const { registry, store } = deps(new FakeAgentHandle({ agentId: "antigravity" }));
+    const result = await runDelegate(registry, store, "antigravity", {
+      brief: "use agy",
+    });
+    expect(result.agentId).toBe("antigravity");
+    expect(result.status).toBe("succeeded");
+  });
+
   it("fails fast when the handle is unavailable", async () => {
     const handle = new FakeAgentHandle();
     handle.available = false;

@@ -26,7 +26,7 @@ You either stay inside one ecosystem or become a human clipboard.
 
 OCC provides a unified control surface so that:
 
-- Claude Code can `delegate_to_codex`, `delegate_to_cursor`, `delegate_to_grok`, `delegate_to_opencode`, etc.
+- Claude Code can `delegate_to_codex`, `delegate_to_cursor`, `delegate_to_grok`, `delegate_to_antigravity`, `delegate_to_opencode`, etc.
 - Editors and UIs can drive the same agents over **ACP**
 - Agents can discover and talk to each other over **A2A**
 - Everything shares one internal runtime model, one registry, and one permission story
@@ -67,6 +67,7 @@ MCP, ACP and A2A are just different ways of talking to the same handles.
 | OpenCode     | Headless / A2A                    | Model-flexible                 |
 | Pi           | a2a-adapter style                 | Lightweight                    |
 | Grok         | Headless `grok -p` (OCC adapter)  | Native X / web / Imagine in brief |
+| Antigravity  | Headless `agy -p` (OCC adapter)   | Google agent CLI; not `gemini` |
 
 More adapters can be added without changing the control plane.
 
@@ -74,7 +75,7 @@ More adapters can be added without changing the control plane.
 
 ## Status
 
-**IP-001 + IP-002 + IP-003 landed.** Claude Code can call `occ_health`, `delegate_to_codex`, `delegate_to_cursor`, and `delegate_to_grok` over MCP stdio. ACP, A2A, and the control-plane daemon are not built yet.
+**IP-001 through IP-004 landed.** Claude Code can call `occ_health`, `delegate_to_codex`, `delegate_to_cursor`, `delegate_to_grok`, and `delegate_to_antigravity` over MCP stdio. ACP, A2A, and the control-plane daemon are not built yet.
 
 ---
 
@@ -97,7 +98,7 @@ claude mcp add orbital -- node "$(pwd)/packages/mcp-facade/dist/stdio.js"
 Or copy `.mcp.json` into the workspace you want Claude to drive. Then:
 
 1. Call `occ_health`. Confirm the target CLI is `available` and `authenticated`.
-2. Call `delegate_to_codex`, `delegate_to_cursor`, or `delegate_to_grok` with a **self-contained brief**: goal, constraints, files in play, definition of done. Pass `cwd` if the server was not launched in that repo. Use `sandbox: "read-only"` for investigation.
+2. Call `delegate_to_codex`, `delegate_to_cursor`, `delegate_to_grok`, or `delegate_to_antigravity` with a **self-contained brief**: goal, constraints, files in play, definition of done. Pass `cwd` if the server was not launched in that repo. Use `sandbox: "read-only"` for investigation.
 3. Review the structured result (status, summary, files changed, `sessionId`).
 4. To continue the same thread, pass that `sessionId` as `resume_session_id`.
 
@@ -114,7 +115,8 @@ packages/
   adapters/codex/       # codex exec
   adapters/cursor/      # cursor-agent -p
   adapters/grok/        # grok -p
-  mcp-facade/           # occ_health, delegate_to_codex, delegate_to_cursor, delegate_to_grok
+  adapters/antigravity/ # agy -p
+  mcp-facade/           # occ_health, delegate_to_*
 ```
 
 Still planned, not in this repo yet: `packages/acp`, `packages/a2a`, more adapters, `packages/control-plane`.
@@ -124,7 +126,7 @@ Still planned, not in this repo yet: `packages/acp`, `packages/a2a`, more adapte
 ## Quick Mental Model for Users
 
 1. Claude analyses the task and writes a precise brief.
-2. It calls an OCC tool (`delegate_to_codex`, `delegate_to_cursor`, `delegate_to_grok`, …).
+2. It calls an OCC tool (`delegate_to_codex`, `delegate_to_cursor`, `delegate_to_grok`, `delegate_to_antigravity`, …).
 3. The external agent runs in its own context / sandbox / worktree.
 4. Claude receives the result (or diff) and continues as the reviewer / integrator.
 
@@ -140,6 +142,7 @@ Same agents remain available to any ACP client or A2A peer.
 - [x] MCP façade (`delegate_to_codex`)
 - [x] Second adapter (Cursor via `cursor-agent -p`) + in-memory registry
 - [x] Third adapter (Grok via `grok -p`)
+- [x] Fourth adapter (Antigravity via `agy -p`)
 - [ ] A2A server surface on the same handles
 - [ ] Full control-plane daemon (lifecycle, isolation, permissions)
 - [ ] Polish, docs, and more adapters

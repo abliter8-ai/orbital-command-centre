@@ -26,6 +26,12 @@ Models (CLI 1.0.5+, grok.com login): omit for grok-4.6 (CLI default). grok-4.5 i
 
 Reasoning effort (optional, maps to --effort): low, medium, high, xhigh, max. Omit for Grok default.`;
 
+export const DELEGATE_TO_ANTIGRAVITY_DESCRIPTION = `Delegate an implementation or investigation brief to the local Antigravity CLI (\`agy -p --output-format json\`). Antigravity is Google's agent CLI (successor surface to Gemini CLI). Never spawn \`gemini\` — that is a different binary. Write a self-contained brief. Returns status, last message, sessionId (conversation_id) for resume_session_id.
+
+Models (CLI 1.1.15, from \`agy models\`): gemini-3.7-flash-high|medium|low, gemini-3.6-flash-*, gemini-3.5-flash-*, gemini-3.1-pro-high|low, claude-sonnet-4-6, claude-opus-4-6-thinking, gpt-oss-120b-medium. Unknown --model is a hard ERROR. Do not pass Codex or Grok slugs.
+
+Reasoning effort (optional, --effort): low, medium, high. OCC xhigh/max map to high. Native web (\`google_search\`, \`read_url\`, \`execute_url\`) stays inside agy — name it in the brief and pre-allow in ~/.gemini/antigravity-cli/settings.json, or use sandbox danger-full-access.`;
+
 export interface DelegateInput {
   brief: string;
   cwd?: string;
@@ -51,6 +57,11 @@ const HINTS: Record<AgentId, { missing: string; unauthenticated: string }> = {
   grok: {
     missing: "Install the Grok CLI (`grok` on PATH) or set GROK_BIN. Do not use `agent` as a Cursor binary.",
     unauthenticated: "Run `grok login` and retry occ_health.",
+  },
+  antigravity: {
+    missing: "Install the Antigravity CLI (`agy` on PATH) or set AGY_BIN. Do not use `gemini`.",
+    unauthenticated:
+      "Run interactive `agy` once (cached OAuth), or set modelProvider=gemini in ~/.gemini/antigravity-cli/settings.json plus GEMINI_API_KEY.",
   },
 };
 
@@ -153,4 +164,12 @@ export function runDelegateToGrok(
   input: DelegateInput,
 ): Promise<DelegationResult> {
   return runDelegate(registry, store, "grok", input);
+}
+
+export function runDelegateToAntigravity(
+  registry: AgentRegistry,
+  store: InMemoryTaskStore,
+  input: DelegateInput,
+): Promise<DelegationResult> {
+  return runDelegate(registry, store, "antigravity", input);
 }

@@ -9,8 +9,8 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "pnpm --filter @occ/core build && pnpm --filter @occ/adapter-kit build && pnpm --filter @occ/adapter-codex exec tsc -p tsconfig.json --noEmit && pnpm --filter @occ/adapter-cursor exec tsc -p tsconfig.json --noEmit && pnpm --filter @occ/adapter-grok exec tsc -p tsconfig.json --noEmit && pnpm --filter @occ/adapter-codex build && pnpm --filter @occ/adapter-cursor build && pnpm --filter @occ/adapter-grok build && pnpm --filter @occ/mcp-facade exec tsc -p tsconfig.json --noEmit",
-    "build": "pnpm --filter @occ/core build && pnpm --filter @occ/adapter-kit build && pnpm --filter @occ/adapter-codex build && pnpm --filter @occ/adapter-cursor build && pnpm --filter @occ/adapter-grok build && pnpm --filter @occ/mcp-facade build",
+    "typecheck": "pnpm --filter @occ/core build && pnpm --filter @occ/adapter-kit build && pnpm --filter @occ/adapter-codex exec tsc -p tsconfig.json --noEmit && pnpm --filter @occ/adapter-cursor exec tsc -p tsconfig.json --noEmit && pnpm --filter @occ/adapter-grok exec tsc -p tsconfig.json --noEmit && pnpm --filter @occ/adapter-antigravity exec tsc -p tsconfig.json --noEmit && pnpm --filter @occ/adapter-codex build && pnpm --filter @occ/adapter-cursor build && pnpm --filter @occ/adapter-grok build && pnpm --filter @occ/adapter-antigravity build && pnpm --filter @occ/mcp-facade exec tsc -p tsconfig.json --noEmit",
+    "build": "pnpm --filter @occ/core build && pnpm --filter @occ/adapter-kit build && pnpm --filter @occ/adapter-codex build && pnpm --filter @occ/adapter-cursor build && pnpm --filter @occ/adapter-grok build && pnpm --filter @occ/adapter-antigravity build && pnpm --filter @occ/mcp-facade build",
     "occ-mcp": "node packages/mcp-facade/dist/stdio.js"
   },
   "devDependencies": {

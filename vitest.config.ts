@@ -11,6 +11,7 @@ export default defineConfig({
       "@occ/adapter-codex": `${root}packages/adapters/codex/src/index.ts`,
       "@occ/adapter-cursor": `${root}packages/adapters/cursor/src/index.ts`,
       "@occ/adapter-grok": `${root}packages/adapters/grok/src/index.ts`,
+      "@occ/adapter-antigravity": `${root}packages/adapters/antigravity/src/index.ts`,
     },
   },
   test: {
