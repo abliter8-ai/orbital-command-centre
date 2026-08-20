@@ -1,14 +1,14 @@
-#requires -Version 5.1
+﻿#requires -Version 5.1
 <#
 .SYNOPSIS
-  Orbital Command Centre — installer (Windows PowerShell / pwsh).
+  Orbital Command Centre - installer (Windows PowerShell / pwsh).
 
 .DESCRIPTION
   1. Checks Node >= 22 and pnpm 10 (tries corepack if pnpm is missing)
   2. pnpm install / build / test
   3. Checks the underlying coding CLIs (codex, cursor-agent, grok, agy, claude)
      against OCC's tested minimum versions; -UpgradeClis runs each CLI's `update`
-  4. Registers the orbital MCP server with Claude Code — and with Cursor
+  4. Registers the orbital MCP server with Claude Code - and with Cursor
      (~\.cursor\mcp.json) and Codex (~\.codex\config.toml) when detected,
      so those harnesses can orchestrate too (the flip)
   5. Grants the orbital MCP tools in ~\.claude\settings.json (backup first)
@@ -40,9 +40,9 @@ $ClaudeSettings = Join-Path $HOME ".claude\settings.json"
 $ClaudeMd = Join-Path $HOME ".claude\CLAUDE.md"
 
 function Say($msg)  { Write-Host "`n== $msg" -ForegroundColor White }
-function Ok($msg)   { Write-Host "  ✓ $msg" -ForegroundColor Green }
+function Ok($msg)   { Write-Host "  [+] $msg" -ForegroundColor Green }
 function Warn($msg) { Write-Host "  ! $msg" -ForegroundColor Yellow }
-function Die($msg)  { Write-Host "  ✗ $msg" -ForegroundColor Red; exit 1 }
+function Die($msg)  { Write-Host "  [x] $msg" -ForegroundColor Red; exit 1 }
 
 function Test-VersionGe([string]$A, [string]$B) {
   $pa = @(($A -split '[.-]') | ForEach-Object { [int]($_ -replace '\D.*$', '') })
@@ -61,16 +61,16 @@ Say "1/8 Toolchain"
 $node = Get-Command node -ErrorAction SilentlyContinue
 if (-not $node) { Die "node not found. Install Node >= 22 (https://nodejs.org or nvm-windows)." }
 $nodeVersion = (node -v).TrimStart('v')
-if (-not (Test-VersionGe $nodeVersion "22.0.0")) { Die "node $nodeVersion is too old — need >= 22." }
+if (-not (Test-VersionGe $nodeVersion "22.0.0")) { Die "node $nodeVersion is too old - need >= 22." }
 Ok "node v$nodeVersion"
 
 if (-not (Get-Command pnpm -ErrorAction SilentlyContinue)) {
-  Warn "pnpm not found — trying corepack"
+  Warn "pnpm not found - trying corepack"
   try { corepack enable | Out-Null } catch { Die "corepack unavailable. Install pnpm 10: npm i -g pnpm@10" }
   try { corepack prepare pnpm@10 --activate | Out-Null } catch { Die "could not activate pnpm 10" }
 }
 $pnpmVersion = (pnpm -v)
-if (-not (Test-VersionGe $pnpmVersion "10.0.0")) { Die "pnpm $pnpmVersion is too old — need >= 10 (corepack prepare pnpm@10 --activate)." }
+if (-not (Test-VersionGe $pnpmVersion "10.0.0")) { Die "pnpm $pnpmVersion is too old - need >= 10 (corepack prepare pnpm@10 --activate)." }
 Ok "pnpm $pnpmVersion"
 
 Say "2/8 Build"
@@ -102,7 +102,7 @@ $Clis = @(
 $anyCli = $false
 foreach ($cli in $Clis) {
   if (-not (Get-Command $cli.Bin -ErrorAction SilentlyContinue)) {
-    Warn "$($cli.Name): '$($cli.Bin)' not on PATH — $($cli.Hint)"
+    Warn "$($cli.Name): '$($cli.Bin)' not on PATH - $($cli.Hint)"
     continue
   }
   $raw = (& $cli.Bin --version 2>$null | Select-Object -First 1)
@@ -119,14 +119,14 @@ foreach ($cli in $Clis) {
     if ($UpgradeClis) {
       Say "    upgrading $($cli.Name) via '$($cli.Bin) update'"
       & $cli.Bin update
-      if ($LASTEXITCODE -ne 0) { Warn "$($cli.Name) self-update failed — update it manually" }
+      if ($LASTEXITCODE -ne 0) { Warn "$($cli.Name) self-update failed - update it manually" }
     } else {
       Warn "    re-run with -UpgradeClis, or: $($cli.Bin) update"
     }
   }
   $anyCli = $true
 }
-if (-not $anyCli) { Warn "no coding CLIs found — install at least one before delegating" }
+if (-not $anyCli) { Warn "no coding CLIs found - install at least one before delegating" }
 
 Say "4/8 MCP registration"
 $stdio = Join-Path $Root "packages\mcp-facade\dist\stdio.js"
@@ -141,7 +141,7 @@ if ($NoMcp) {
     if ($LASTEXITCODE -ne 0) { Die "claude mcp add failed" }
     Ok "claude mcp add orbital -- node $stdio"
   } else {
-    Warn "'claude' CLI not found — register manually later:"
+    Warn "'claude' CLI not found - register manually later:"
     Warn "  claude mcp add orbital -- node `"$stdio`""
   }
 
@@ -153,7 +153,7 @@ if ($NoMcp) {
     if ($LASTEXITCODE -ne 0) { Die "cursor registration failed" }
     Ok "registered orbital in $cursorMcp (restart Cursor to pick it up)"
   } else {
-    Warn "Cursor not detected — skipping Cursor registration"
+    Warn "Cursor not detected - skipping Cursor registration"
   }
 
   # Codex (the flip: Codex as orchestrator). Detected via ~\.codex or the CLI.
@@ -164,7 +164,7 @@ if ($NoMcp) {
     if ($LASTEXITCODE -ne 0) { Die "codex registration failed" }
     Ok "registered orbital in $codexConfig"
   } else {
-    Warn "Codex not detected — skipping Codex registration"
+    Warn "Codex not detected - skipping Codex registration"
   }
 }
 
@@ -252,7 +252,7 @@ Say "8/8 Model catalog"
 if ($LASTEXITCODE -eq 0) {
   Ok "model catalog refreshed"
 } else {
-  Warn "catalog refresh incomplete — static fallbacks will be used; re-run scripts/update-models.ps1 later"
+  Warn "catalog refresh incomplete - static fallbacks will be used; re-run scripts/update-models.ps1 later"
 }
 
 Say "Done"
