@@ -104,7 +104,7 @@ MCP, ACP and A2A are just different ways of talking to the same handles.
 | Codex        | ACP / CLI                         | Strong first target            |
 | Cursor       | ACP / A2A / headless              | Also surfaces Grok models      |
 | OpenCode     | Headless / A2A                    | Model-flexible                 |
-| Pi           | a2a-adapter style                 | Lightweight                    |
+| Pi           | Orchestrator-side via curl skill  | Adapter candidate (RPC mode)   |
 | Grok         | Headless `grok -p` (OCC adapter)  | Native X / web / Imagine in brief |
 | Antigravity  | Headless `agy -p` (OCC adapter)   | Google agent CLI; not `gemini` |
 | Claude       | Headless `claude -p` (OCC adapter) | The flip: non-Claude orchestrators borrow Claude |
@@ -115,7 +115,7 @@ More adapters can be added without changing the control plane.
 
 ## Status
 
-**All three surfaces and the control plane are built and live-verified.** Claude Code can call `occ_health`, `occ_models`, `occ_tasks`, `occ_cancel`, `occ_capabilities`, `delegate_to_codex`, `delegate_to_cursor`, `delegate_to_grok`, `delegate_to_antigravity`, `delegate_to_claude`, and Grok's first-class native tools `grok_x_search`, `grok_imagine`, `grok_video` over MCP stdio. The same five handles are also served over **ACP** (stdio, for editors like Zed) and **A2A** (HTTP/JSON-RPC, per-agent cards), and the `orbital` daemon hosts all agents behind one loopback port with policy mediation and an audit log. Model catalogs are live-probed from the installed CLIs.
+**All three surfaces and the control plane are built and live-verified.** Claude Code can call `occ_health`, `occ_models`, `occ_tasks`, `occ_cancel`, `occ_capabilities`, `delegate_to_codex`, `delegate_to_cursor`, `delegate_to_grok`, `delegate_to_antigravity`, `delegate_to_claude`, and Grok's first-class native tools `grok_x_search`, `grok_imagine`, `grok_video` over MCP stdio. The same five handles are also served over **ACP** (stdio, for editors like Zed) and **A2A** (HTTP/JSON-RPC, per-agent cards) with crash-proof, re-attachable tasks, and the `orbital` daemon hosts all agents behind one loopback port with policy mediation and an audit log. Model catalogs are live-probed from the installed CLIs. Cursor, Codex, Code Puppy and oh-my-pi can orchestrate the same swarm (the flip); pi gets a curl-based delegation skill.
 
 ---
 
@@ -133,7 +133,7 @@ Windows (PowerShell):
 pwsh scripts/install.ps1
 ```
 
-The installer checks Node ≥22 / pnpm 10, builds and tests, verifies the underlying coding CLIs against the tested minimum versions (`--upgrade-clis` also runs each CLI's own `update`), registers the `orbital` MCP server with Claude Code — and, when detected, with Cursor (`~/.cursor/mcp.json`) and Codex (`~/.codex/config.toml`) so those harnesses can orchestrate too (timestamped backups; `--no-mcp` / `-NoMcp` opts out) — grants the fifteen `mcp__orbital__*` tool permissions in `~/.claude/settings.json` (with a timestamped backup), links the `delegating-to-*` and `choosing-the-right-agent` skills into `~/.claude/skills`, appends a short delegation pointer to `~/.claude/CLAUDE.md` (idempotent, `--no-claude-md` / `-NoClaudeMd` opts out), and refreshes the model catalog.
+The installer checks Node ≥22 / pnpm 10, builds and tests, verifies the underlying coding CLIs against the tested minimum versions (`--upgrade-clis` also runs each CLI's own `update`), registers the `orbital` MCP server with Claude Code — and, when detected, with Cursor (`~/.cursor/mcp.json`), Codex (`~/.codex/config.toml`) and Code Puppy (`~/.code_puppy/mcp/servers.json`) so those harnesses can orchestrate too (timestamped backups; `--no-mcp` / `-NoMcp` opts out; oh-my-pi inherits those registrations on its first run) — grants the fifteen `mcp__orbital__*` tool permissions in `~/.claude/settings.json` (with a timestamped backup), links the `delegating-to-*` and `choosing-the-right-agent` skills into `~/.claude/skills` (and, when pi or oh-my-pi is detected, installs the `delegating-via-orbital` A2A-curl skill into `~/.agents/skills`), appends a short delegation pointer to `~/.claude/CLAUDE.md` (idempotent, `--no-claude-md` / `-NoClaudeMd` opts out), and refreshes the model catalog.
 
 Refresh the per-agent model lists any time with:
 
@@ -264,9 +264,13 @@ packages/
   acp/                  # ACP server over stdio (occ-acp --agent <id>)
   a2a/                  # A2A server over HTTP/JSON-RPC (occ-a2a --agent <id> --port N)
   control-plane/        # orbital daemon: registry, policy, audit, lifecycle (orbital up/down)
+integrations/
+  pi/skills/            # Agent-Standard skills for MCP-less harnesses (delegating-via-orbital)
 scripts/
   install.sh            # macOS/Linux installer (deps, build, MCP, permissions, skills, catalog)
   install.ps1           # Windows installer (same steps)
+  register-flip.mjs     # merge orbital MCP registration into Cursor/Codex/Code Puppy configs
+  test-register-flip.mjs# registration merge tests (runs in pnpm test)
   update-models.sh      # refresh ~/.occ/model-catalog.json from the live CLIs
   update-models.ps1     # Windows twin
 ```
@@ -306,7 +310,9 @@ Same agents remain available to any ACP client or A2A peer.
 - [x] Streaming handles (ACP chunks / A2A SSE) once an adapter produces incremental output
 - [x] Polish + docs
 - [x] Fifth adapter (Claude via `claude -p`) — the flip: Cursor/Codex/Grok can orchestrate Claude
-- [ ] More adapters (standing track — next candidate when a sixth CLI is installed)
+- [x] Installer flip registration (Cursor, Codex, Code Puppy) + open-source harness support (omp inheritance, pi curl skill)
+- [x] A2A hardening: disconnect-proof re-attachment (`ListTasks`/`GetTask`) + crash-proof durable task files
+- [ ] More adapters (standing track — pi/omp via their headless/RPC modes are the leading candidates)
 
 ---
 
