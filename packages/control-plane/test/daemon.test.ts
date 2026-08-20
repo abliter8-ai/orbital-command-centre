@@ -41,6 +41,7 @@ async function startDaemon(config: OrbitalConfig = defaultConfig()): Promise<str
     config,
     handles: fakeHandles(),
     audit,
+    tasksDir: join(workDir, "a2a-tasks"),
     probe: async () => ({ available: true, authenticated: true, detail: "test probe" }),
   });
   await new Promise<void>((resolve) => server?.listen(0, "127.0.0.1", resolve));

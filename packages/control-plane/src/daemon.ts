@@ -1,7 +1,9 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import { join } from "node:path";
 import {
   buildAgentCard,
   createAgentRpcHandler,
+  defaultTasksDir,
   OccAgentExecutor,
   writeRpcResult,
   type AgentRpcHandler,
@@ -26,6 +28,8 @@ export interface DaemonDeps {
   config: OrbitalConfig;
   handles: Record<AgentId, AgentHandle>;
   audit: AuditLog;
+  /** Directory for per-agent durable task files. Default: ~/.occ/a2a-tasks. */
+  tasksDir?: string;
   /** Test hook: override the availability probe. */
   probe?: (handle: AgentHandle) => Promise<Availability>;
 }
@@ -74,6 +78,7 @@ export function createDaemonServer(deps: DaemonDeps): Server {
   // Clean up worktrees orphaned by a previous crashed daemon before serving.
   void sweepStaleWorktrees(worktreeRoot(), audit).catch(() => undefined);
 
+  const tasksDir = deps.tasksDir ?? defaultTasksDir();
   for (const id of AGENT_IDS) {
     const handle =
       config.agents[id].isolation === "worktree"
@@ -94,7 +99,12 @@ export function createDaemonServer(deps: DaemonDeps): Server {
       availability: () => availabilityFor(id),
     });
     runtimes.set(id, {
-      rpc: createAgentRpcHandler({ card, executor }),
+      rpc: createAgentRpcHandler({
+        card,
+        executor,
+        // Per-agent durable store: tasks survive a daemon crash or restart.
+        taskStorePath: join(tasksDir, `daemon-${id}.json`),
+      }),
       card,
       cardUrl: `${baseUrl}/agents/${id}/.well-known/agent-card.json`,
     });

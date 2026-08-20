@@ -1,20 +1,21 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { TaskState, type AgentCard } from "@a2a-js/sdk";
+import type { AgentCard } from "@a2a-js/sdk";
 import {
   DefaultRequestHandler,
-  InMemoryTaskStore,
   JsonRpcTransportHandler,
   ServerCallContext,
   type AgentExecutor,
 } from "@a2a-js/sdk/server";
-import type {
-  ListTasksRequest,
-  ListTasksResponse,
-} from "@a2a-js/sdk";
+import { FileTaskStore, NormalizedTaskStore } from "./stores.js";
 
 export interface A2aHttpOptions {
   card: AgentCard;
   executor: AgentExecutor;
+  /**
+   * When set, tasks persist to this JSON file (atomic writes, hydrated on
+   * boot) so they survive a server crash or restart. Unset: in-memory only.
+   */
+  taskStorePath?: string;
 }
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
@@ -30,23 +31,6 @@ async function readBody(req: IncomingMessage): Promise<string> {
 }
 
 export type AgentRpcHandler = (body: string) => Promise<unknown>;
-
-/**
- * Works around an @a2a-js/sdk interop bug: ListTasksRequest.fromJSON maps an
- * absent `status` filter to TASK_STATE_UNSPECIFIED (0), and the stock store's
- * list() then filters every real task out (`status !== undefined`), so
- * ListTasks with no status filter could never return anything. Treat
- * UNSPECIFIED as "no filter" — an explicit UNSPECIFIED filter is meaningless.
- */
-class NormalizedTaskStore extends InMemoryTaskStore {
-  override async list(params: ListTasksRequest, context: ServerCallContext): Promise<ListTasksResponse> {
-    const normalized =
-      params.status === TaskState.TASK_STATE_UNSPECIFIED
-        ? ({ ...params, status: undefined } as unknown as ListTasksRequest)
-        : params;
-    return super.list(normalized, context);
-  }
-}
 
 /**
  * The spec's JSON convention is "user"/"agent" for message roles, but the
@@ -78,7 +62,7 @@ function normalizeRequestBody(body: string): string {
 export function createAgentRpcHandler(options: A2aHttpOptions): AgentRpcHandler {
   const requestHandler = new DefaultRequestHandler(
     options.card,
-    new NormalizedTaskStore(),
+    options.taskStorePath ? new FileTaskStore(options.taskStorePath) : new NormalizedTaskStore(),
     options.executor,
   );
   const transport = new JsonRpcTransportHandler(requestHandler);

@@ -7,3 +7,4 @@ export {
   type A2aHttpOptions,
   type AgentRpcHandler,
 } from "./http.js";
+export { FileTaskStore, NormalizedTaskStore, defaultTasksDir } from "./stores.js";

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { join } from "node:path";
 import { AntigravityAgentHandle } from "@occ/adapter-antigravity";
 import { ClaudeAgentHandle } from "@occ/adapter-claude";
 import { CodexAgentHandle } from "@occ/adapter-codex";
@@ -8,6 +9,7 @@ import { InMemoryTaskStore, type AgentHandle, type AgentId } from "@occ/core";
 import { buildAgentCard } from "./card.js";
 import { OccAgentExecutor } from "./executor.js";
 import { createA2aHttpServer } from "./http.js";
+import { defaultTasksDir } from "./stores.js";
 
 function parseArgs(argv: string[]): { agent: AgentId; port: number } {
   let agent: AgentId = "codex";
@@ -47,13 +49,16 @@ const { agent: agentId, port } = parseArgs(process.argv.slice(2));
 const store = new InMemoryTaskStore();
 const handle = buildHandle(agentId, store);
 const url = `http://127.0.0.1:${port}`;
+const taskStorePath = join(defaultTasksDir(), `${agentId}.json`);
 const server = createA2aHttpServer({
   card: buildAgentCard(agentId, url),
   executor: new OccAgentExecutor({ handle, store }),
+  taskStorePath,
 });
 
 server.listen(port, "127.0.0.1", () => {
   process.stdout.write(`occ-a2a: ${agentId} on ${url} (card: ${url}/.well-known/agent-card.json)\n`);
+  process.stdout.write(`occ-a2a: tasks persist to ${taskStorePath}\n`);
 });
 
 process.on("SIGTERM", () => server.close(() => process.exit(0)));
