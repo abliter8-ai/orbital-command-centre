@@ -32,7 +32,7 @@ export interface OrbitalConfig {
   agents: Record<AgentId, AgentPolicy>;
 }
 
-const AGENT_IDS: AgentId[] = ["codex", "cursor", "grok", "antigravity"];
+const AGENT_IDS: AgentId[] = ["codex", "cursor", "grok", "antigravity", "claude"];
 
 export function defaultConfig(): OrbitalConfig {
   return {
@@ -43,6 +43,7 @@ export function defaultConfig(): OrbitalConfig {
       cursor: { enabled: true, maxSandbox: "workspace-write" },
       grok: { enabled: true, maxSandbox: "workspace-write" },
       antigravity: { enabled: true, maxSandbox: "workspace-write" },
+      claude: { enabled: true, maxSandbox: "workspace-write" },
     },
   };
 }

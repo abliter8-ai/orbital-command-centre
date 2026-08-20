@@ -31,6 +31,9 @@ actually usable right now.
 | Show the agent a screenshot / mock / diagram | Codex | `delegate_to_codex` with `images: [abs paths]` |
 | Read-only repo Q&A / plan | Cursor or Codex | `sandbox: "read-only"` (Cursor `--mode ask` is cheapest) |
 | A specific model by name (200+ catalog) | Cursor | `delegate_to_cursor` + slug from `occ_models` |
+| Second opinion from a clean-context Claude | Claude | `delegate_to_claude` (`sandbox: "read-only"`) |
+| Orchestrator is Cursor/Codex/Grok, task wants Claude's tier | Claude | `delegate_to_claude` (the flip — same orbital server, their MCP config) |
+| Server-side web search/fetch without permission setup | Claude | `delegate_to_claude` (name WebSearch/WebFetch in the brief) |
 | Architecture, security review, final judgment | **Claude itself** | do not delegate |
 
 ## Rules of thumb
@@ -42,8 +45,8 @@ actually usable right now.
 3. **One agent owns the diff.** Never let two agents write the same tree in
    parallel; sequence them (implement → review) instead.
 4. **Review stays home — or crosses over.** Claude keeps final judgment. A
-   second opinion goes to `codex_review`, and never to the agent that wrote
-   the diff.
+   second opinion goes to `codex_review` (or a clean-context
+   `delegate_to_claude`), and never to the agent that wrote the diff.
 5. **Native tools need their flags.** Grok X/Imagine hang under `read-only`
    (use the first-class tools); agy web tools soft-deny without allow-rules
    (`antigravity_research` pre-flights this — `"fix"` merges the rule with a

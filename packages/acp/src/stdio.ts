@@ -2,6 +2,7 @@
 import { Readable, Writable } from "node:stream";
 import * as acp from "@agentclientprotocol/sdk";
 import { AntigravityAgentHandle } from "@occ/adapter-antigravity";
+import { ClaudeAgentHandle } from "@occ/adapter-claude";
 import { CodexAgentHandle } from "@occ/adapter-codex";
 import { CursorAgentHandle } from "@occ/adapter-cursor";
 import { GrokAgentHandle } from "@occ/adapter-grok";
@@ -18,7 +19,7 @@ function parseArgs(argv: string[]): { agent: AgentId; model?: string } {
       model = argv[i + 1];
     }
   }
-  if (!["codex", "cursor", "grok", "antigravity"].includes(agent)) {
+  if (!["codex", "cursor", "grok", "antigravity", "claude"].includes(agent)) {
     process.stderr.write(`occ-acp: unknown --agent "${agent}"\n`);
     process.exit(2);
   }
@@ -33,6 +34,8 @@ function buildHandle(agent: AgentId, store: InMemoryTaskStore): AgentHandle {
       return new GrokAgentHandle(store);
     case "antigravity":
       return new AntigravityAgentHandle(store);
+    case "claude":
+      return new ClaudeAgentHandle(store);
     default:
       return new CodexAgentHandle(store);
   }

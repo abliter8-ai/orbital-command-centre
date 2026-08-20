@@ -4,9 +4,9 @@
 # What it does:
 #   1. Checks Node >= 22 and pnpm 10 (tries corepack if pnpm is missing)
 #   2. pnpm install / build / test
-#   3. Checks the underlying coding CLIs (codex, cursor-agent, grok, agy) are
-#      present and meets OCC's tested minimum versions; --upgrade-clis runs
-#      each CLI's own `update` subcommand when it is behind
+#   3. Checks the underlying coding CLIs (codex, cursor-agent, grok, agy,
+#      claude) are present and meets OCC's tested minimum versions;
+#      --upgrade-clis runs each CLI's own `update` subcommand when behind
 #   4. Registers the orbital MCP server with Claude Code (absolute path)
 #   5. Grants the orbital MCP tools in ~/.claude/settings.json (backup first)
 #   6. Links the delegating-to-* and choosing-the-right-agent skills into ~/.claude/skills
@@ -94,6 +94,7 @@ CLIS=(
   "cursor|cursor-agent|2026.08.11|curl https://cursor.com/install -fsS | bash  (then: cursor-agent login)"
   "grok|grok|1.0.5|see https://grok.com/cli  (then: grok login)"
   "antigravity|agy|1.1.15|see https://antigravity.google  (then: run agy once to cache OAuth)"
+  "claude|claude|2.1.235|npm i -g @anthropic-ai/claude-code  (then: claude auth login)"
 )
 ANY_CLI=0
 for entry in "${CLIS[@]}"; do
@@ -156,6 +157,7 @@ const tools = [
   "mcp__orbital__delegate_to_cursor",
   "mcp__orbital__delegate_to_grok",
   "mcp__orbital__delegate_to_antigravity",
+  "mcp__orbital__delegate_to_claude",
   "mcp__orbital__grok_x_search",
   "mcp__orbital__grok_imagine",
   "mcp__orbital__grok_video",
@@ -201,7 +203,7 @@ else
 
 <!-- orbital-occ -->
 ## Orbital OCC delegation
-Save context tokens: delegate implementation, investigation, and research to the orbital MCP tools `delegate_to_codex` / `delegate_to_cursor` / `delegate_to_grok` / `delegate_to_antigravity` instead of doing it in-context (check `occ_health` first; `occ_capabilities` shows who owns what, `occ_models` the live model lists).
+Save context tokens: delegate implementation, investigation, and research to the orbital MCP tools `delegate_to_codex` / `delegate_to_cursor` / `delegate_to_grok` / `delegate_to_antigravity` / `delegate_to_claude` (clean-context second opinion or parallel worker) instead of doing it in-context (check `occ_health` first; `occ_capabilities` shows who owns what, `occ_models` the live model lists).
 Grok also does what this harness cannot: `grok_x_search` (live X posts), `grok_imagine` (image gen/edit), `grok_video` (short video from a still).
 EOF
   ok "appended delegation note to $CLAUDE_MD"

@@ -418,9 +418,15 @@ describe("antigravity_research tool", () => {
 });
 
 describe("nativeCapabilities", () => {
-  it("covers all four agents with grok's unique tools first-class", () => {
+  it("covers all five agents with grok's unique tools first-class", () => {
     const caps = nativeCapabilities();
-    expect(Object.keys(caps).sort()).toEqual(["antigravity", "codex", "cursor", "grok"]);
+    expect(Object.keys(caps).sort()).toEqual([
+      "antigravity",
+      "claude",
+      "codex",
+      "cursor",
+      "grok",
+    ]);
     const grokTools = caps.grok.nativeTools.map((tool) => tool.name);
     expect(grokTools).toContain("x_keyword_search");
     expect(grokTools).toContain("image_to_video / reference_to_video");

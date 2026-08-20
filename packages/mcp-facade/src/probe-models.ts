@@ -1,4 +1,5 @@
 import { runChild } from "@occ/adapter-kit";
+import { resolveClaudeBin } from "@occ/adapter-claude";
 import { readCodexConfigDefaults, resolveCodexBin } from "@occ/adapter-codex";
 import { cursorSpawnEnv, resolveCursorBin } from "@occ/adapter-cursor";
 import { grokSpawnEnv, parseGrokModelCatalog, resolveGrokBin } from "@occ/adapter-grok";
@@ -138,10 +139,27 @@ async function probeAntigravity(): Promise<AgentModelCatalog | null> {
  * around its CLI state). Null entries mean "probe failed — keep the previous
  * catalog entry".
  */
+async function probeClaude(): Promise<AgentModelCatalog | null> {
+  // Claude Code has no non-interactive models listing (`claude models` is an
+  // interactive picker). Refresh the CLI version; aliases stay curated-static.
+  const bin = resolveClaudeBin();
+  const versionLabel = await probeVersion(bin, ["--version"]);
+  if (versionLabel === undefined) return null;
+  return {
+    agentId: "claude",
+    fetchedAt: new Date().toISOString(),
+    cliVersion: versionLabel.split(/\s+/)[0],
+    models: ["sonnet", "opus", "haiku"],
+    source: "static",
+    note: "Claude Code has no non-interactive models listing; aliases track the account's current generation. Full model IDs also work.",
+  };
+}
+
 export async function probeAllModels(): Promise<Record<AgentId, AgentModelCatalog | null>> {
   const codex = await probeCodex();
   const cursor = await probeCursor();
   const antigravity = await probeAntigravity();
+  const claude = await probeClaude();
   const grok = await probeGrok();
-  return { codex, cursor, grok, antigravity };
+  return { codex, cursor, grok, antigravity, claude };
 }

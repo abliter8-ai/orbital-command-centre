@@ -4,8 +4,9 @@
   Refresh the live model catalog for every installed agent CLI.
 
 .DESCRIPTION
-  Probes codex (config default), cursor-agent (--list-models), agy (models)
-  and grok (models, clean env), then writes ~\.occ\model-catalog.json
+  Probes codex (config default), cursor-agent (--list-models), agy (models),
+  grok (models, clean env) and claude (--version; aliases stay curated — no
+  non-interactive listing), then writes ~\.occ\model-catalog.json
   (override with OCC_CATALOG_PATH). The MCP server reads the catalog at
   startup — restart Claude Code (or the orbital server) to pick up fresh slugs.
 

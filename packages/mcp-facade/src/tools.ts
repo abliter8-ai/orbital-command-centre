@@ -47,6 +47,9 @@ const ANTIGRAVITY_INTRO = `Delegate an implementation or investigation brief to 
 const ANTIGRAVITY_MODEL_CAUTIONS = `Unknown --model is a hard ERROR — pass only slugs from this catalog. Do not pass Codex or Grok slugs.`;
 const ANTIGRAVITY_EFFORT = `Reasoning effort (optional, --effort): low, medium, high. OCC xhigh/max map to high. Native web (\`google_search\`, \`read_url\`, \`execute_url\`) stays inside agy — name it in the brief and pre-allow in ~/.gemini/antigravity-cli/settings.json, or use sandbox danger-full-access.`;
 
+const CLAUDE_INTRO = `Delegate a brief to a fresh headless Claude Code (\`claude -p\`). This is the flip: when the orchestrator is Cursor, Codex, or Grok, this is how they borrow Claude; when the orchestrator is Claude Code, this buys a clean-context second opinion or parallel worker. The child runs isolated from your MCP servers. Write a self-contained brief: goal, constraints, files in play, definition of done. Returns status, last message, changed files, cost, and a sessionId for resume_session_id.`;
+const CLAUDE_MODEL_CAUTIONS = `Model aliases sonnet|opus|haiku track the account's current generation; full IDs also work. There is no effort field — reasoning depth is baked into the model choice. Delegation consumes the account's own quota (cost is reported per run).`;
+
 export function formatModelSection(entry: AgentModelCatalog): string {
   const fetched = entry.fetchedAt ?? "never";
   const cli = entry.cliVersion ? `, CLI ${entry.cliVersion}` : "";
@@ -65,6 +68,7 @@ export function buildDelegateDescriptions(catalog: ModelCatalog): Record<AgentId
     cursor: `${CURSOR_INTRO}\n\n${formatModelSection(catalog.agents.cursor)} ${CURSOR_MODEL_CAUTIONS}`,
     grok: `${GROK_INTRO}\n\n${formatModelSection(catalog.agents.grok)} ${GROK_MODEL_CAUTIONS}\n\n${GROK_EFFORT}`,
     antigravity: `${ANTIGRAVITY_INTRO}\n\n${formatModelSection(catalog.agents.antigravity)} ${ANTIGRAVITY_MODEL_CAUTIONS}\n\n${ANTIGRAVITY_EFFORT}`,
+    claude: `${CLAUDE_INTRO}\n\n${formatModelSection(catalog.agents.claude)} ${CLAUDE_MODEL_CAUTIONS}`,
   };
 }
 
@@ -100,6 +104,10 @@ const HINTS: Record<AgentId, { missing: string; unauthenticated: string }> = {
     missing: "Install the Antigravity CLI (`agy` on PATH) or set AGY_BIN. Do not use `gemini`.",
     unauthenticated:
       "Run interactive `agy` once (cached OAuth), or set modelProvider=gemini in ~/.gemini/antigravity-cli/settings.json plus GEMINI_API_KEY.",
+  },
+  claude: {
+    missing: "Install Claude Code (`claude` on PATH) or set CLAUDE_BIN.",
+    unauthenticated: "Run `claude auth login` and retry occ_health.",
   },
 };
 

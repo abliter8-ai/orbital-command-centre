@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { AntigravityAgentHandle } from "@occ/adapter-antigravity";
+import { ClaudeAgentHandle } from "@occ/adapter-claude";
 import { CodexAgentHandle } from "@occ/adapter-codex";
 import { CursorAgentHandle } from "@occ/adapter-cursor";
 import { GrokAgentHandle } from "@occ/adapter-grok";
@@ -16,7 +17,7 @@ function parseArgs(argv: string[]): { agent: AgentId; port: number } {
     if (argv[i] === "--agent" && next) agent = next as AgentId;
     else if (argv[i] === "--port" && next) port = Number.parseInt(next, 10);
   }
-  if (!["codex", "cursor", "grok", "antigravity"].includes(agent)) {
+  if (!["codex", "cursor", "grok", "antigravity", "claude"].includes(agent)) {
     process.stderr.write(`occ-a2a: unknown --agent "${agent}"\n`);
     process.exit(2);
   }
@@ -35,6 +36,8 @@ function buildHandle(agent: AgentId, store: InMemoryTaskStore): AgentHandle {
       return new GrokAgentHandle(store);
     case "antigravity":
       return new AntigravityAgentHandle(store);
+    case "claude":
+      return new ClaudeAgentHandle(store);
     default:
       return new CodexAgentHandle(store);
   }

@@ -72,6 +72,13 @@ export function defaultCatalog(): ModelCatalog {
         ],
         note: "Static fallback. Run scripts/update-models for the live `agy models` catalog.",
       },
+      claude: {
+        agentId: "claude",
+        fetchedAt: null,
+        source: "static",
+        models: ["sonnet", "opus", "haiku"],
+        note: "Claude Code has no non-interactive models listing; aliases track the account's current generation. Full model IDs also work.",
+      },
     },
   };
 }
@@ -99,7 +106,7 @@ export function loadCatalog(path: string = catalogPath()): ModelCatalog {
   if (typeof file.updatedAt === "string") catalog.updatedAt = file.updatedAt;
   const agents = file.agents;
   if (typeof agents !== "object" || agents === null) return catalog;
-  for (const agentId of ["codex", "cursor", "grok", "antigravity"] as const) {
+  for (const agentId of ["codex", "cursor", "grok", "antigravity", "claude"] as const) {
     const entry = (agents as Record<string, unknown>)[agentId];
     if (isAgentEntry(entry) && entry.agentId === agentId) {
       catalog.agents[agentId] = { ...entry, models: [...entry.models] };

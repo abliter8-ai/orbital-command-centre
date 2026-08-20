@@ -19,7 +19,7 @@ import type { OrbitalConfig } from "./config.js";
 import { EnforcingExecutor } from "./enforcing-executor.js";
 import { WorktreeHandle, sweepStaleWorktrees, worktreeRoot } from "./worktree.js";
 
-const AGENT_IDS: AgentId[] = ["codex", "cursor", "grok", "antigravity"];
+const AGENT_IDS: AgentId[] = ["codex", "cursor", "grok", "antigravity", "claude"];
 const AVAILABILITY_TTL_MS = 30_000;
 
 export interface DaemonDeps {

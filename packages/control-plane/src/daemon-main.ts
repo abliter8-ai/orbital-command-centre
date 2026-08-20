@@ -2,6 +2,7 @@
 // Detached child process entry — spawned by `orbital up`. stdout/stderr are
 // redirected to ~/.occ/daemon/daemon.log by the CLI.
 import { AntigravityAgentHandle } from "@occ/adapter-antigravity";
+import { ClaudeAgentHandle } from "@occ/adapter-claude";
 import { CodexAgentHandle } from "@occ/adapter-codex";
 import { CursorAgentHandle } from "@occ/adapter-cursor";
 import { GrokAgentHandle } from "@occ/adapter-grok";
@@ -16,6 +17,7 @@ function buildHandles(): Record<AgentId, AgentHandle> {
     cursor: new CursorAgentHandle(new InMemoryTaskStore()),
     grok: new GrokAgentHandle(new InMemoryTaskStore()),
     antigravity: new AntigravityAgentHandle(new InMemoryTaskStore()),
+    claude: new ClaudeAgentHandle(new InMemoryTaskStore()),
   };
 }
 

@@ -1,4 +1,5 @@
 import { AntigravityAgentHandle } from "@occ/adapter-antigravity";
+import { ClaudeAgentHandle } from "@occ/adapter-claude";
 import { CodexAgentHandle } from "@occ/adapter-codex";
 import { CursorAgentHandle } from "@occ/adapter-cursor";
 import { GrokAgentHandle } from "@occ/adapter-grok";
@@ -123,6 +124,16 @@ const antigravityDelegateInput = {
     ),
 };
 
+const claudeDelegateInput = {
+  ...sharedDelegateInput,
+  model: z
+    .string()
+    .optional()
+    .describe(
+      "claude --model: alias (sonnet|opus|haiku) or full ID. Omit for the account default. No effort field — reasoning depth is baked into the model choice.",
+    ),
+};
+
 export function createDefaultDeps(): OccServerDeps {
   const registry = new AgentRegistry();
   const store = new InMemoryTaskStore();
@@ -130,6 +141,7 @@ export function createDefaultDeps(): OccServerDeps {
   registry.register(new CursorAgentHandle(store));
   registry.register(new GrokAgentHandle(store));
   registry.register(new AntigravityAgentHandle(store));
+  registry.register(new ClaudeAgentHandle(store));
   return { registry, store };
 }
 
@@ -468,6 +480,18 @@ export function createOccServer(
     },
     async (input) => {
       const result = await runDelegate(deps.registry, deps.store, "antigravity", input);
+      return { ...result, markdown: formatDelegationMarkdown(result) };
+    },
+  );
+
+  server.tool(
+    {
+      name: "delegate_to_claude",
+      description: descriptions.claude,
+      input: z.object(claudeDelegateInput),
+    },
+    async (input) => {
+      const result = await runDelegate(deps.registry, deps.store, "claude", input);
       return { ...result, markdown: formatDelegationMarkdown(result) };
     },
   );

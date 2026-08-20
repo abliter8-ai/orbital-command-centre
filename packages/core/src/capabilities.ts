@@ -163,5 +163,31 @@ export function nativeCapabilities(): Record<AgentId, AgentNativeProfile> {
         },
       ],
     },
+    claude: {
+      agentId: "claude",
+      differentiator:
+        "Claude itself as a delegate — the flip that lets Cursor/Codex/Grok orchestrators borrow Claude's reasoning tier, and lets Claude Code fan out second-opinion or parallel work to a clean child.",
+      reviewedAt: "2026-08-20",
+      nativeTools: [
+        {
+          name: "web-search+fetch",
+          kind: "search",
+          summary: "Server-side WebSearch/WebFetch — no local permission rule needed in plan mode.",
+          invoke: "delegate_to_claude — name WebSearch/WebFetch in the brief",
+        },
+        {
+          name: "task-subagents",
+          kind: "session",
+          summary: "The child can fan out its own Task subagents for parallel exploration.",
+          invoke: "delegate_to_claude — ask for subagent fan-out in the brief",
+        },
+        {
+          name: "second-opinion-review",
+          kind: "code",
+          summary: "Same-engine independent review: plan with one agent, critique with a clean-context Claude.",
+          invoke: "delegate_to_claude with sandbox read-only",
+        },
+      ],
+    },
   };
 }

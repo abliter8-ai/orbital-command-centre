@@ -26,6 +26,9 @@ importers:
       '@occ/adapter-antigravity':
         specifier: workspace:*
         version: link:../adapters/antigravity
+      '@occ/adapter-claude':
+        specifier: workspace:*
+        version: link:../adapters/claude
       '@occ/adapter-codex':
         specifier: workspace:*
         version: link:../adapters/codex
@@ -47,6 +50,9 @@ importers:
       '@occ/adapter-antigravity':
         specifier: workspace:*
         version: link:../adapters/antigravity
+      '@occ/adapter-claude':
+        specifier: workspace:*
+        version: link:../adapters/claude
       '@occ/adapter-codex':
         specifier: workspace:*
         version: link:../adapters/codex
@@ -61,6 +67,15 @@ importers:
         version: link:../core
 
   packages/adapters/antigravity:
+    dependencies:
+      '@occ/adapter-kit':
+        specifier: workspace:*
+        version: link:../kit
+      '@occ/core':
+        specifier: workspace:*
+        version: link:../../core
+
+  packages/adapters/claude:
     dependencies:
       '@occ/adapter-kit':
         specifier: workspace:*
@@ -109,6 +124,9 @@ importers:
       '@occ/adapter-antigravity':
         specifier: workspace:*
         version: link:../adapters/antigravity
+      '@occ/adapter-claude':
+        specifier: workspace:*
+        version: link:../adapters/claude
       '@occ/adapter-codex':
         specifier: workspace:*
         version: link:../adapters/codex
@@ -129,6 +147,9 @@ importers:
       '@occ/adapter-antigravity':
         specifier: workspace:*
         version: link:../adapters/antigravity
+      '@occ/adapter-claude':
+        specifier: workspace:*
+        version: link:../adapters/claude
       '@occ/adapter-codex':
         specifier: workspace:*
         version: link:../adapters/codex

@@ -1,4 +1,4 @@
-export type AgentId = "codex" | "cursor" | "grok" | "antigravity";
+export type AgentId = "codex" | "cursor" | "grok" | "antigravity" | "claude";
 
 export type TaskStatus =
   | "queued"

@@ -94,7 +94,8 @@ $Clis = @(
   @{ Name = "codex";       Bin = "codex";       Min = "0.148.0";    Hint = "npm i -g @openai/codex  (then: codex login)" },
   @{ Name = "cursor";      Bin = "cursor-agent"; Min = "2026.08.11"; Hint = "https://cursor.com/install  (then: cursor-agent login)" },
   @{ Name = "grok";        Bin = "grok";        Min = "1.0.5";      Hint = "see https://grok.com/cli  (then: grok login)" },
-  @{ Name = "antigravity"; Bin = "agy";         Min = "1.1.15";     Hint = "see https://antigravity.google  (then: run agy once to cache OAuth)" }
+  @{ Name = "antigravity"; Bin = "agy";         Min = "1.1.15";     Hint = "see https://antigravity.google  (then: run agy once to cache OAuth)" },
+  @{ Name = "claude";      Bin = "claude";      Min = "2.1.235";    Hint = "npm i -g @anthropic-ai/claude-code  (then: claude auth login)" }
 )
 $anyCli = $false
 foreach ($cli in $Clis) {
@@ -159,6 +160,7 @@ const tools = [
   "mcp__orbital__delegate_to_cursor",
   "mcp__orbital__delegate_to_grok",
   "mcp__orbital__delegate_to_antigravity",
+  "mcp__orbital__delegate_to_claude",
   "mcp__orbital__grok_x_search",
   "mcp__orbital__grok_imagine",
   "mcp__orbital__grok_video",
@@ -211,7 +213,7 @@ if ($NoClaudeMd) {
 
 <!-- orbital-occ -->
 ## Orbital OCC delegation
-Save context tokens: delegate implementation, investigation, and research to the orbital MCP tools ``delegate_to_codex`` / ``delegate_to_cursor`` / ``delegate_to_grok`` / ``delegate_to_antigravity`` instead of doing it in-context (check ``occ_health`` first; ``occ_capabilities`` shows who owns what, ``occ_models`` the live model lists).
+Save context tokens: delegate implementation, investigation, and research to the orbital MCP tools ``delegate_to_codex`` / ``delegate_to_cursor`` / ``delegate_to_grok`` / ``delegate_to_antigravity`` / ``delegate_to_claude`` (clean-context second opinion or parallel worker) instead of doing it in-context (check ``occ_health`` first; ``occ_capabilities`` shows who owns what, ``occ_models`` the live model lists).
 Grok also does what this harness cannot: ``grok_x_search`` (live X posts), ``grok_imagine`` (image gen/edit), ``grok_video`` (short video from a still).
 "@
   Add-Content -Path $ClaudeMd -Value $note -Encoding UTF8

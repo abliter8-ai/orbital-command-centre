@@ -6,6 +6,7 @@ const DISPLAY_NAMES: Record<AgentId, string> = {
   cursor: "Cursor",
   grok: "Grok",
   antigravity: "Antigravity",
+  claude: "Claude",
 };
 
 function skillId(name: string): string {

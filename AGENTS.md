@@ -16,10 +16,10 @@ The internal contract is an **AgentHandle** (`packages/core`). MCP, ACP and A2A 
 
 ## Current Status
 
-All four adapters and all three surfaces are built and live-verified, plus the control-plane daemon:
+All five adapters and all three surfaces are built and live-verified, plus the control-plane daemon:
 
-- **MCP façade** (`@occ/mcp-facade`): `occ_health`, `occ_models`, `occ_tasks`, `occ_cancel`, `occ_capabilities`, `delegate_to_{codex,cursor,grok,antigravity}` (Codex takes `images`), and first-class native tools `codex_review`, `antigravity_research` (permission pre-flight), `grok_x_search`, `grok_imagine`, `grok_video`.
-- **ACP** (`@occ/acp`): `occ-acp --agent <id>` over stdio; session modes map to OCC sandboxes. Streaming handles (Codex, Cursor) emit live `tool_call` updates and `agent_message_chunk`s; buffered handles deliver one chunk at turn end.
+- **MCP façade** (`@occ/mcp-facade`): `occ_health`, `occ_models`, `occ_tasks`, `occ_cancel`, `occ_capabilities`, `delegate_to_{codex,cursor,grok,antigravity,claude}` (Codex takes `images`), and first-class native tools `codex_review`, `antigravity_research` (permission pre-flight), `grok_x_search`, `grok_imagine`, `grok_video`. The façade is harness-agnostic: registered in `~/.cursor/mcp.json` or `~/.codex/config.toml`, Cursor or Codex becomes the orchestrator and can `delegate_to_claude` (the flip).
+- **ACP** (`@occ/acp`): `occ-acp --agent <id>` over stdio; session modes map to OCC sandboxes. Streaming handles (Codex, Cursor, Claude) emit live `tool_call` updates and `agent_message_chunk`s; buffered handles deliver one chunk at turn end.
 - **A2A** (`@occ/a2a`): `occ-a2a --agent <id> --port N`; agent cards generated from the capability profile; `SendMessage` / `SendStreamingMessage` (SSE) / `GetTask` / `CancelTask`, cards advertise `streaming: true`.
 - **Control plane** (`@occ/control-plane`): `orbital up|down|status|audit|logs` — one loopback port hosting all agents under `/agents/<id>`, registry (`/v1/registry`), policy mediation (`~/.occ/orbital.json`: `enabled`, `maxSandbox`, `defaultModel`, `isolation`), append-only audit log (`~/.occ/audit.jsonl`). `isolation: "worktree"` runs each delegation in a throwaway `git worktree` detached at HEAD (created under `~/.occ/worktrees`, removed after; stale ones swept at startup).
 - **Model catalog** live-probed from the installed CLIs into `~/.occ/model-catalog.json` (24h staleness self-refresh; `scripts/update-models.sh|ps1`).
@@ -35,6 +35,7 @@ packages/
   adapters/cursor/      # cursor-agent -p (never `agent` — that name is Grok on some PATHs)
   adapters/grok/        # grok -p --output-format json (+ native X / Imagine / video briefs)
   adapters/antigravity/ # agy -p --output-format json (never `gemini`)
+  adapters/claude/      # claude -p --output-format stream-json (the flip target)
   mcp-facade/           # FastMCP tools for Claude Code
   acp/                  # ACP server over stdio (@agentclientprotocol/sdk)
   a2a/                  # A2A server over node:http (@a2a-js/sdk, no express)
@@ -58,7 +59,8 @@ Keep `core` free of concrete protocol and CLI dependencies. Façades depend on a
 - OCC never passes `--dangerously-bypass-approvals-and-sandbox` (Codex). `danger-full-access` maps to each CLI's own documented full-access flags only.
 - Codex write path is `--approve-for-me` (0.148 refuses `--sandbox` combined with it).
 - `codex exec review` takes a narrow flag set: no `--cd`, no `--sandbox`, and the target flags (`--uncommitted` / `--base` / `--commit`) are mutually exclusive with a custom `[PROMPT]`. OCC emits a prompt only for `target: custom`.
-- Streaming is event-level, not token-level: `PromptRequest.onEvent` carries `text` / `tool_start` / `tool_end`. Codex and Cursor emit (Cursor only in write sandboxes — read-only is buffered `--output-format json`); Grok and Antigravity stay buffered and advertise `streaming: false` on the handle.
+- Streaming is event-level, not token-level: `PromptRequest.onEvent` carries `text` / `tool_start` / `tool_end`. Codex, Cursor, and Claude emit (Cursor only in write sandboxes — read-only is buffered `--output-format json`); Grok and Antigravity stay buffered and advertise `streaming: false` on the handle.
+- Claude children always run `--strict-mcp-config` with an empty MCP config — a delegated Claude must never inherit the orchestrator's MCP servers (nested orbital fan-out). Sandbox maps to `--permission-mode` (`plan` / `acceptEdits` / `bypassPermissions`); there is no effort flag (baked into model choice); `filesChanged` is derived from Edit/Write `tool_use` blocks and per-run cost rides in the summary.
 - Cursor write path is `cursor-agent -p --force --trust` with stream-json; read-only is `--mode ask`. Spawned Cursor processes set `AGENT_CLI_CREDENTIAL_STORE=file` (locked macOS keychain workaround).
 - Grok headless is `grok --no-leader -p --output-format json --verbatim`; write path adds `--always-approve`; OS `--sandbox` is **not** passed (hangs 1.0.5). X-search/Imagine briefs must not run under `read-only` (tool approval hang) — the first-class tools handle this.
 - Antigravity web tools soft-deny without `permissions.allow` rules in the user's settings; document, don't work around.
