@@ -33,7 +33,9 @@ orbital fan-out). Tool: `delegate_to_claude` on the **orbital** MCP server.
 
 **Do not use** for work the orchestrator should do itself in-context (small
 edits, questions it can answer directly) — delegation costs a full round-trip
-and the account's own quota (per-run cost is reported in the result summary).
+and spends the account's own usage. The result summary reports the CLI's
+API-equivalent cost meter: on claude.ai subscription auth that is a proxy for
+rate-limit burn (not a charge); on API-key auth it is literal dollars.
 
 ## Sandbox mapping
 

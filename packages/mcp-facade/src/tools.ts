@@ -48,7 +48,7 @@ const ANTIGRAVITY_MODEL_CAUTIONS = `Unknown --model is a hard ERROR — pass onl
 const ANTIGRAVITY_EFFORT = `Reasoning effort (optional, --effort): low, medium, high. OCC xhigh/max map to high. Native web (\`google_search\`, \`read_url\`, \`execute_url\`) stays inside agy — name it in the brief and pre-allow in ~/.gemini/antigravity-cli/settings.json, or use sandbox danger-full-access.`;
 
 const CLAUDE_INTRO = `Delegate a brief to a fresh headless Claude Code (\`claude -p\`). This is the flip: when the orchestrator is Cursor, Codex, or Grok, this is how they borrow Claude; when the orchestrator is Claude Code, this buys a clean-context second opinion or parallel worker. The child runs isolated from your MCP servers. Write a self-contained brief: goal, constraints, files in play, definition of done. Returns status, last message, changed files, cost, and a sessionId for resume_session_id.`;
-const CLAUDE_MODEL_CAUTIONS = `Model aliases sonnet|opus|haiku track the account's current generation; full IDs also work. There is no effort field — reasoning depth is baked into the model choice. Delegation consumes the account's own quota (cost is reported per run).`;
+const CLAUDE_MODEL_CAUTIONS = `Model aliases sonnet|opus|haiku track the account's current generation; full IDs also work. There is no effort field — reasoning depth is baked into the model choice. Delegation spends the account's own usage: on claude.ai subscription auth the reported cost is the CLI's API-equivalent meter (a proxy for rate-limit burn, not a charge); on API-key auth it is literal.`;
 
 export function formatModelSection(entry: AgentModelCatalog): string {
   const fetched = entry.fetchedAt ?? "never";
