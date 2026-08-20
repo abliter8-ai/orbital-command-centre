@@ -149,9 +149,9 @@ async function probeClaude(): Promise<AgentModelCatalog | null> {
     agentId: "claude",
     fetchedAt: new Date().toISOString(),
     cliVersion: versionLabel.split(/\s+/)[0],
-    models: ["sonnet", "opus", "haiku"],
+    models: ["sonnet", "opus", "claude-haiku-4-5"],
     source: "static",
-    note: "Claude Code has no non-interactive models listing; aliases track the account's current generation. Full model IDs also work.",
+    note: "Claude Code has no non-interactive models listing. The `haiku` short alias is broken headless (silently runs sonnet — anthropics/claude-code#39701); use the full ID claude-haiku-4-5.",
   };
 }
 

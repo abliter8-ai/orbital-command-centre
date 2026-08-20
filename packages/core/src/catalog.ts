@@ -76,8 +76,8 @@ export function defaultCatalog(): ModelCatalog {
         agentId: "claude",
         fetchedAt: null,
         source: "static",
-        models: ["sonnet", "opus", "haiku"],
-        note: "Claude Code has no non-interactive models listing; aliases are account/plan-dependent (haiku can silently resolve to sonnet on some tiers). Full model IDs also work. The delegation result reports the model that actually ran.",
+        models: ["sonnet", "opus", "claude-haiku-4-5"],
+        note: "Claude Code has no non-interactive models listing. The `haiku` short alias is broken headless (silently runs sonnet — anthropics/claude-code#39701, open since early 2026); use the full ID claude-haiku-4-5. The delegation result reports the model that actually ran.",
       },
     },
   };
