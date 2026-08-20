@@ -1,16 +1,17 @@
 #!/usr/bin/env node
 // Register the orbital MCP server with a non-Claude harness ("the flip").
-//   node scripts/register-flip.mjs cursor <mcp.json path> <stdio.js path>
-//   node scripts/register-flip.mjs codex  <config.toml path> <stdio.js path>
+//   node scripts/register-flip.mjs cursor    <mcp.json path> <stdio.js path>
+//   node scripts/register-flip.mjs codex     <config.toml path> <stdio.js path>
+//   node scripts/register-flip.mjs codepuppy <servers.json path> <stdio.js path>
 // Idempotent. Backs up any existing file to <file>.bak-<timestamp> first.
 // Malformed JSON is backed up and rebuilt rather than silently merged.
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 
 const [target, file, stdio] = process.argv.slice(2);
-if (!["cursor", "codex"].includes(target) || !file || !stdio) {
+if (!["cursor", "codex", "codepuppy"].includes(target) || !file || !stdio) {
   process.stderr.write(
-    "usage: node register-flip.mjs cursor|codex <config path> <stdio.js path>\n",
+    "usage: node register-flip.mjs cursor|codex|codepuppy <config path> <stdio.js path>\n",
   );
   process.exit(2);
 }
@@ -27,7 +28,11 @@ function write(text) {
   writeFileSync(file, text);
 }
 
-if (target === "cursor") {
+if (target === "cursor" || target === "codepuppy") {
+  // Both are JSON with a single server-map key: cursor uses "mcpServers",
+  // Code Puppy (~/.code_puppy/mcp/servers.json) uses "servers" and adds
+  // per-server env/auto_start fields.
+  const key = target === "cursor" ? "mcpServers" : "servers";
   let config = {};
   let raw = "";
   try {
@@ -40,14 +45,17 @@ if (target === "cursor") {
     try {
       config = JSON.parse(raw);
     } catch {
-      process.stdout.write("  existing mcp.json was not valid JSON — rebuilt (backup kept)\n");
+      process.stdout.write(`  existing ${key} file was not valid JSON — rebuilt (backup kept)\n`);
       config = {};
     }
   }
-  config.mcpServers = config.mcpServers ?? {};
-  config.mcpServers.orbital = { command: "node", args: [stdio] };
+  config[key] = config[key] ?? {};
+  config[key].orbital =
+    target === "cursor"
+      ? { command: "node", args: [stdio] }
+      : { command: "node", args: [stdio], env: {}, auto_start: true };
   write(`${JSON.stringify(config, null, 2)}\n`);
-  process.stdout.write(`  cursor: mcpServers.orbital -> node ${stdio}\n`);
+  process.stdout.write(`  ${target}: ${key}.orbital -> node ${stdio}\n`);
 } else {
   // TOML: replace an existing [mcp_servers.orbital] section, else append.
   let text = "";

@@ -8,10 +8,15 @@
 #      claude) are present and meets OCC's tested minimum versions;
 #      --upgrade-clis runs each CLI's own `update` subcommand when behind
 #   4. Registers the orbital MCP server with Claude Code — and with Cursor
-#      (~/.cursor/mcp.json) and Codex (~/.codex/config.toml) when detected,
-#      so those harnesses can orchestrate too (the flip)
+#      (~/.cursor/mcp.json), Codex (~/.codex/config.toml) and Code Puppy
+#      (~/.code_puppy/mcp/servers.json) when detected, so those harnesses can
+#      orchestrate too (the flip). oh-my-pi inherits the Claude/Cursor/Codex
+#      registrations on its first run.
 #   5. Grants the orbital MCP tools in ~/.claude/settings.json (backup first)
-#   6. Links the delegating-to-* and choosing-the-right-agent skills into ~/.claude/skills
+#   6. Links the delegating-to-* and choosing-the-right-agent skills into
+#      ~/.claude/skills; when pi or oh-my-pi is detected, also installs the
+#      A2A-over-curl delegation skill into ~/.agents/skills (Agent Skills
+#      standard location both harnesses read)
 #   7. Appends a short "delegate to save tokens" pointer to ~/.claude/CLAUDE.md
 #   8. Refreshes the live model catalog (~/.occ/model-catalog.json)
 #
@@ -160,6 +165,21 @@ else
   else
     warn "Codex not detected — skipping Codex registration"
   fi
+
+  # Code Puppy (local-model harness with a native MCP client).
+  CODEPUPPY_SERVERS="${OCC_CODEPUPPY_SERVERS:-$HOME/.code_puppy/mcp/servers.json}"
+  if [ -d "$HOME/.code_puppy" ] || command -v code-puppy >/dev/null 2>&1; then
+    node "$ROOT/scripts/register-flip.mjs" codepuppy "$CODEPUPPY_SERVERS" "$STDIO"
+    ok "registered orbital in $CODEPUPPY_SERVERS (auto_start; /mcp list in Code Puppy to confirm)"
+  else
+    warn "Code Puppy not detected — skipping Code Puppy registration"
+  fi
+
+  # oh-my-pi has no separate registration: it inherits MCP servers from
+  # .claude/.cursor/.codex on first run. Say so when detected.
+  if command -v omp >/dev/null 2>&1 || [ -d "$HOME/.omp" ]; then
+    ok "oh-my-pi detected — it inherits the Claude/Cursor/Codex registrations above on first run"
+  fi
 fi
 
 say "5/8 Tool permissions"
@@ -214,6 +234,21 @@ else
       ok "copied $name -> $SKILLS_TARGET/$name"
     fi
   done
+
+  # pi / oh-my-pi: no MCP by design (pi) — the delegation skill teaches the
+  # A2A-over-curl path instead. ~/.agents/skills is the Agent Skills standard
+  # location both harnesses read.
+  if command -v pi >/dev/null 2>&1 || [ -d "$HOME/.pi" ] || command -v omp >/dev/null 2>&1 || [ -d "$HOME/.omp" ]; then
+    AGENTS_SKILLS="${OCC_AGENTS_SKILLS:-$HOME/.agents/skills}"
+    mkdir -p "$AGENTS_SKILLS"
+    if ln -sfn "$ROOT/integrations/pi/skills/delegating-via-orbital" "$AGENTS_SKILLS/delegating-via-orbital" 2>/dev/null; then
+      ok "linked delegating-via-orbital -> $AGENTS_SKILLS/delegating-via-orbital (pi/omp)"
+    else
+      rm -rf "$AGENTS_SKILLS/delegating-via-orbital"
+      cp -R "$ROOT/integrations/pi/skills/delegating-via-orbital" "$AGENTS_SKILLS/delegating-via-orbital"
+      ok "copied delegating-via-orbital -> $AGENTS_SKILLS/delegating-via-orbital (pi/omp)"
+    fi
+  fi
 fi
 
 say "7/8 CLAUDE.md note"

@@ -188,6 +188,16 @@ args = ["/path/to/a8-orbital-command-centre/packages/mcp-facade/dist/stdio.js"]
 
 Cursor then sees `delegate_to_claude` (plus the other four delegates and the native tools) on its toolbelt; Codex likewise. A non-MCP peer can reach the same handles over A2A via the daemon (`http://127.0.0.1:7100/agents/claude`). Delegated Claude children run isolated from the orchestrator's MCP servers, so there is no recursive fan-out.
 
+### Open-source harnesses (Code Puppy, pi, oh-my-pi)
+
+The same trick works for local-model harnesses — code with a cheap/private local model, tag-team a cloud agent when stuck:
+
+- **Code Puppy** has a native MCP client; the installer registers orbital in `~/.code_puppy/mcp/servers.json` (with `auto_start`) when Code Puppy is detected. Its agent then sees the delegate tools as `orbital_delegate_to_*`.
+- **oh-my-pi (omp)** inherits MCP servers from `.claude` / `.cursor` / `.codex` on its first run, so the registrations above already cover it.
+- **pi** refuses MCP by design (context-bloat philosophy), so the installer instead drops an Agent-Standard skill — `delegating-via-orbital` — into `~/.agents/skills/` (which omp also reads) when pi or omp is detected. It teaches the harness to delegate with plain `curl` against the daemon's A2A endpoints, including streaming and crash-proof re-attachment. Zero context overhead until the agent actually needs a bigger model.
+
+The flip also runs the other way: pi and omp have headless/RPC modes, so a local-model pi is adapter material — Claude orchestrating an air-gapped local worker is the mirror image of the above, and on the roadmap.
+
 ---
 
 ## ACP surface (editors)

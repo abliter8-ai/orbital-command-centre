@@ -9,12 +9,15 @@
   3. Checks the underlying coding CLIs (codex, cursor-agent, grok, agy, claude)
      against OCC's tested minimum versions; -UpgradeClis runs each CLI's `update`
   4. Registers the orbital MCP server with Claude Code - and with Cursor
-     (~\.cursor\mcp.json) and Codex (~\.codex\config.toml) when detected,
-     so those harnesses can orchestrate too (the flip)
+     (~\.cursor\mcp.json), Codex (~\.codex\config.toml) and Code Puppy
+     (~\.code_puppy\mcp\servers.json) when detected, so those harnesses can
+     orchestrate too (the flip). oh-my-pi inherits the Claude/Cursor/Codex
+     registrations on its first run.
   5. Grants the orbital MCP tools in ~\.claude\settings.json (backup first)
   6. Links the delegating-to-* and choosing-the-right-agent skills into
-     ~\.claude\skills (copies if the
-     symlink needs privileges you do not have)
+     ~\.claude\skills (copies if the symlink needs privileges you do not
+     have); when pi or oh-my-pi is detected, also installs the A2A-over-curl
+     delegation skill into ~\.agents\skills
   7. Appends a short "delegate to save tokens" pointer to ~\.claude\CLAUDE.md
   8. Refreshes the live model catalog (~\.occ\model-catalog.json)
 
@@ -166,6 +169,24 @@ if ($NoMcp) {
   } else {
     Warn "Codex not detected - skipping Codex registration"
   }
+
+  # Code Puppy (local-model harness with a native MCP client).
+  $puppyServers = if ($env:OCC_CODEPUPPY_SERVERS) { $env:OCC_CODEPUPPY_SERVERS } else { Join-Path $HOME ".code_puppy\mcp\servers.json" }
+  $puppyDir = Join-Path $HOME ".code_puppy"
+  if ((Test-Path $puppyDir) -or (Get-Command code-puppy -ErrorAction SilentlyContinue)) {
+    & node (Join-Path $Root "scripts\register-flip.mjs") codepuppy $puppyServers $stdio
+    if ($LASTEXITCODE -ne 0) { Die "codepuppy registration failed" }
+    Ok "registered orbital in $puppyServers (auto_start; /mcp list in Code Puppy to confirm)"
+  } else {
+    Warn "Code Puppy not detected - skipping Code Puppy registration"
+  }
+
+  # oh-my-pi has no separate registration: it inherits MCP servers from
+  # .claude/.cursor/.codex on first run. Say so when detected.
+  $ompDir = Join-Path $HOME ".omp"
+  if ((Get-Command omp -ErrorAction SilentlyContinue) -or (Test-Path $ompDir)) {
+    Ok "oh-my-pi detected - it inherits the Claude/Cursor/Codex registrations above on first run"
+  }
 }
 
 Say "5/8 Tool permissions"
@@ -225,6 +246,28 @@ if ($NoSkills) {
       Copy-Item $_.FullName $dest -Recurse
     }
     if ($linked) { Ok "linked $($_.Name) -> $dest" } else { Ok "copied $($_.Name) -> $dest (symlink needs Developer Mode or admin)" }
+  }
+
+  # pi / oh-my-pi: no MCP by design (pi) - the delegation skill teaches the
+  # A2A-over-curl path instead. ~\.agents\skills is the Agent Skills standard
+  # location both harnesses read.
+  $piDir = Join-Path $HOME ".pi"
+  $ompDir2 = Join-Path $HOME ".omp"
+  if ((Get-Command pi -ErrorAction SilentlyContinue) -or (Test-Path $piDir) -or (Get-Command omp -ErrorAction SilentlyContinue) -or (Test-Path $ompDir2)) {
+    $agentsSkills = if ($env:OCC_AGENTS_SKILLS) { $env:OCC_AGENTS_SKILLS } else { Join-Path $HOME ".agents\skills" }
+    if (-not (Test-Path $agentsSkills)) { New-Item -ItemType Directory -Path $agentsSkills -Force | Out-Null }
+    $src = Join-Path $Root "integrations\pi\skills\delegating-via-orbital"
+    $dest = Join-Path $agentsSkills "delegating-via-orbital"
+    $linked = $false
+    try {
+      if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
+      New-Item -ItemType SymbolicLink -Path $dest -Target $src -ErrorAction Stop | Out-Null
+      $linked = $true
+    } catch {
+      if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
+      Copy-Item $src $dest -Recurse
+    }
+    if ($linked) { Ok "linked delegating-via-orbital -> $dest (pi/omp)" } else { Ok "copied delegating-via-orbital -> $dest (pi/omp)" }
   }
 }
 

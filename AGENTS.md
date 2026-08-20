@@ -41,7 +41,8 @@ packages/
   a2a/                  # A2A server over node:http (@a2a-js/sdk, no express)
   control-plane/        # orbital daemon: registry, policy, audit, lifecycle
 skills/                 # Claude Code skills (delegating-to-*, choosing-the-right-agent)
-scripts/                # install.sh|ps1, update-models.sh|ps1
+integrations/pi/skills/ # Agent-Standard skills for MCP-less harnesses (pi, oh-my-pi) — A2A-over-curl delegation
+scripts/                # install.sh|ps1, update-models.sh|ps1, register-flip.mjs (+ test-register-flip.mjs)
 ```
 
 Keep `core` free of concrete protocol and CLI dependencies. Façades depend on adapters, never the reverse.
