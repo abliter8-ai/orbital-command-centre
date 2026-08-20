@@ -7,7 +7,9 @@
 #   3. Checks the underlying coding CLIs (codex, cursor-agent, grok, agy,
 #      claude) are present and meets OCC's tested minimum versions;
 #      --upgrade-clis runs each CLI's own `update` subcommand when behind
-#   4. Registers the orbital MCP server with Claude Code (absolute path)
+#   4. Registers the orbital MCP server with Claude Code — and with Cursor
+#      (~/.cursor/mcp.json) and Codex (~/.codex/config.toml) when detected,
+#      so those harnesses can orchestrate too (the flip)
 #   5. Grants the orbital MCP tools in ~/.claude/settings.json (backup first)
 #   6. Links the delegating-to-* and choosing-the-right-agent skills into ~/.claude/skills
 #   7. Appends a short "delegate to save tokens" pointer to ~/.claude/CLAUDE.md
@@ -124,18 +126,40 @@ for entry in "${CLIS[@]}"; do
 done
 [ "$ANY_CLI" -eq 1 ] || warn "no coding CLIs found — install at least one before delegating"
 
-say "4/8 MCP registration (Claude Code)"
+say "4/8 MCP registration"
+STDIO="$ROOT/packages/mcp-facade/dist/stdio.js"
 if [ "$DO_MCP" -eq 0 ]; then
   warn "skipped (--no-mcp)"
-elif command -v claude >/dev/null 2>&1; then
-  if claude mcp get orbital >/dev/null 2>&1; then
-    claude mcp remove orbital >/dev/null 2>&1 || true
-  fi
-  claude mcp add orbital -- node "$ROOT/packages/mcp-facade/dist/stdio.js"
-  ok "claude mcp add orbital -- node $ROOT/packages/mcp-facade/dist/stdio.js"
 else
-  warn "'claude' CLI not found — register manually later:"
-  warn "  claude mcp add orbital -- node \"$ROOT/packages/mcp-facade/dist/stdio.js\""
+  # Claude Code
+  if command -v claude >/dev/null 2>&1; then
+    if claude mcp get orbital >/dev/null 2>&1; then
+      claude mcp remove orbital >/dev/null 2>&1 || true
+    fi
+    claude mcp add orbital -- node "$STDIO"
+    ok "claude mcp add orbital -- node $STDIO"
+  else
+    warn "'claude' CLI not found — register manually later:"
+    warn "  claude mcp add orbital -- node \"$STDIO\""
+  fi
+
+  # Cursor (the flip: Cursor as orchestrator). Detected via ~/.cursor or the CLI.
+  CURSOR_MCP_JSON="${OCC_CURSOR_MCP_JSON:-$HOME/.cursor/mcp.json}"
+  if [ -d "$HOME/.cursor" ] || command -v cursor-agent >/dev/null 2>&1 || command -v cursor >/dev/null 2>&1; then
+    node "$ROOT/scripts/register-flip.mjs" cursor "$CURSOR_MCP_JSON" "$STDIO"
+    ok "registered orbital in $CURSOR_MCP_JSON (restart Cursor to pick it up)"
+  else
+    warn "Cursor not detected — skipping Cursor registration"
+  fi
+
+  # Codex (the flip: Codex as orchestrator). Detected via ~/.codex or the CLI.
+  CODEX_CONFIG="${OCC_CODEX_CONFIG:-$HOME/.codex/config.toml}"
+  if [ -d "$HOME/.codex" ] || command -v codex >/dev/null 2>&1; then
+    node "$ROOT/scripts/register-flip.mjs" codex "$CODEX_CONFIG" "$STDIO"
+    ok "registered orbital in $CODEX_CONFIG"
+  else
+    warn "Codex not detected — skipping Codex registration"
+  fi
 fi
 
 say "5/8 Tool permissions"

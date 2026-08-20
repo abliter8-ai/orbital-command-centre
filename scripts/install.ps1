@@ -6,9 +6,11 @@
 .DESCRIPTION
   1. Checks Node >= 22 and pnpm 10 (tries corepack if pnpm is missing)
   2. pnpm install / build / test
-  3. Checks the underlying coding CLIs (codex, cursor-agent, grok, agy) against
-     OCC's tested minimum versions; -UpgradeClis runs each CLI's own `update`
-  4. Registers the orbital MCP server with Claude Code (absolute path)
+  3. Checks the underlying coding CLIs (codex, cursor-agent, grok, agy, claude)
+     against OCC's tested minimum versions; -UpgradeClis runs each CLI's `update`
+  4. Registers the orbital MCP server with Claude Code — and with Cursor
+     (~\.cursor\mcp.json) and Codex (~\.codex\config.toml) when detected,
+     so those harnesses can orchestrate too (the flip)
   5. Grants the orbital MCP tools in ~\.claude\settings.json (backup first)
   6. Links the delegating-to-* and choosing-the-right-agent skills into
      ~\.claude\skills (copies if the
@@ -126,19 +128,44 @@ foreach ($cli in $Clis) {
 }
 if (-not $anyCli) { Warn "no coding CLIs found — install at least one before delegating" }
 
-Say "4/8 MCP registration (Claude Code)"
+Say "4/8 MCP registration"
 $stdio = Join-Path $Root "packages\mcp-facade\dist\stdio.js"
 if ($NoMcp) {
   Warn "skipped (-NoMcp)"
-} elseif (Get-Command claude -ErrorAction SilentlyContinue) {
-  & claude mcp get orbital 2>$null | Out-Null
-  if ($LASTEXITCODE -eq 0) { & claude mcp remove orbital 2>$null | Out-Null }
-  & claude mcp add orbital -- node $stdio
-  if ($LASTEXITCODE -ne 0) { Die "claude mcp add failed" }
-  Ok "claude mcp add orbital -- node $stdio"
 } else {
-  Warn "'claude' CLI not found — register manually later:"
-  Warn "  claude mcp add orbital -- node `"$stdio`""
+  # Claude Code
+  if (Get-Command claude -ErrorAction SilentlyContinue) {
+    & claude mcp get orbital 2>$null | Out-Null
+    if ($LASTEXITCODE -eq 0) { & claude mcp remove orbital 2>$null | Out-Null }
+    & claude mcp add orbital -- node $stdio
+    if ($LASTEXITCODE -ne 0) { Die "claude mcp add failed" }
+    Ok "claude mcp add orbital -- node $stdio"
+  } else {
+    Warn "'claude' CLI not found — register manually later:"
+    Warn "  claude mcp add orbital -- node `"$stdio`""
+  }
+
+  # Cursor (the flip: Cursor as orchestrator). Detected via ~\.cursor or the CLI.
+  $cursorMcp = if ($env:OCC_CURSOR_MCP_JSON) { $env:OCC_CURSOR_MCP_JSON } else { Join-Path $HOME ".cursor\mcp.json" }
+  $cursorDir = Join-Path $HOME ".cursor"
+  if ((Test-Path $cursorDir) -or (Get-Command cursor-agent -ErrorAction SilentlyContinue) -or (Get-Command cursor -ErrorAction SilentlyContinue)) {
+    & node (Join-Path $Root "scripts\register-flip.mjs") cursor $cursorMcp $stdio
+    if ($LASTEXITCODE -ne 0) { Die "cursor registration failed" }
+    Ok "registered orbital in $cursorMcp (restart Cursor to pick it up)"
+  } else {
+    Warn "Cursor not detected — skipping Cursor registration"
+  }
+
+  # Codex (the flip: Codex as orchestrator). Detected via ~\.codex or the CLI.
+  $codexConfig = if ($env:OCC_CODEX_CONFIG) { $env:OCC_CODEX_CONFIG } else { Join-Path $HOME ".codex\config.toml" }
+  $codexDir = Join-Path $HOME ".codex"
+  if ((Test-Path $codexDir) -or (Get-Command codex -ErrorAction SilentlyContinue)) {
+    & node (Join-Path $Root "scripts\register-flip.mjs") codex $codexConfig $stdio
+    if ($LASTEXITCODE -ne 0) { Die "codex registration failed" }
+    Ok "registered orbital in $codexConfig"
+  } else {
+    Warn "Codex not detected — skipping Codex registration"
+  }
 }
 
 Say "5/8 Tool permissions"

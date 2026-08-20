@@ -133,7 +133,7 @@ Windows (PowerShell):
 pwsh scripts/install.ps1
 ```
 
-The installer checks Node ≥22 / pnpm 10, builds and tests, verifies the underlying coding CLIs against the tested minimum versions (`--upgrade-clis` also runs each CLI's own `update`), registers the `orbital` MCP server with Claude Code, grants the fifteen `mcp__orbital__*` tool permissions in `~/.claude/settings.json` (with a timestamped backup), links the `delegating-to-*` and `choosing-the-right-agent` skills into `~/.claude/skills`, appends a short delegation pointer to `~/.claude/CLAUDE.md` (idempotent, `--no-claude-md` / `-NoClaudeMd` opts out), and refreshes the model catalog.
+The installer checks Node ≥22 / pnpm 10, builds and tests, verifies the underlying coding CLIs against the tested minimum versions (`--upgrade-clis` also runs each CLI's own `update`), registers the `orbital` MCP server with Claude Code — and, when detected, with Cursor (`~/.cursor/mcp.json`) and Codex (`~/.codex/config.toml`) so those harnesses can orchestrate too (timestamped backups; `--no-mcp` / `-NoMcp` opts out) — grants the fifteen `mcp__orbital__*` tool permissions in `~/.claude/settings.json` (with a timestamped backup), links the `delegating-to-*` and `choosing-the-right-agent` skills into `~/.claude/skills`, appends a short delegation pointer to `~/.claude/CLAUDE.md` (idempotent, `--no-claude-md` / `-NoClaudeMd` opts out), and refreshes the model catalog.
 
 Refresh the per-agent model lists any time with:
 
@@ -165,7 +165,7 @@ Codex default write path is `--approve-for-me` (0.148 refuses `--sandbox` togeth
 
 ## Orchestrate from Cursor or Codex (the flip)
 
-The MCP facade is harness-agnostic — anything that speaks MCP stdio can be the orchestrator, and with the Claude adapter that includes delegating *to* Claude *from* another agent. Register the same server in their config:
+The MCP facade is harness-agnostic — anything that speaks MCP stdio can be the orchestrator, and with the Claude adapter that includes delegating *to* Claude *from* another agent. The installer registers orbital with Cursor and Codex automatically when it detects them; by hand, the config is:
 
 ```jsonc
 // ~/.cursor/mcp.json
