@@ -77,7 +77,7 @@ export function defaultCatalog(): ModelCatalog {
         fetchedAt: null,
         source: "static",
         models: ["sonnet", "opus", "haiku"],
-        note: "Claude Code has no non-interactive models listing; aliases track the account's current generation. Full model IDs also work.",
+        note: "Claude Code has no non-interactive models listing; aliases are account/plan-dependent (haiku can silently resolve to sonnet on some tiers). Full model IDs also work. The delegation result reports the model that actually ran.",
       },
     },
   };

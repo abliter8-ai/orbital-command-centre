@@ -49,6 +49,7 @@ describe("ClaudeAgentHandle", () => {
     expect(result.agentId).toBe("claude");
     expect(result.usage?.outputTokens).toBe(7);
     expect(result.summary).toContain("$0.0123");
+    expect(result.summary).toContain("claude-sonnet-5");
     // The fixture's Write tool_use shows up in the file trail.
     expect(result.filesChanged).toEqual([{ path: "docs/note.md", change: "add" }]);
   });

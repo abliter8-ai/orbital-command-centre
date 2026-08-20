@@ -27,7 +27,11 @@ const TRANSCRIPT = [
   }),
   JSON.stringify({
     type: "assistant",
-    message: { role: "assistant", content: [{ type: "text", text: "Done." }] },
+    message: {
+      role: "assistant",
+      model: "claude-sonnet-5",
+      content: [{ type: "text", text: "Done." }],
+    },
   }),
   JSON.stringify({ type: "rate_limit_event", rate_limit_info: { status: "allowed" } }),
   JSON.stringify({
@@ -48,6 +52,7 @@ describe("parseClaudeStreamJsonl", () => {
     expect(parsed.output).toBe("Done.");
     expect(parsed.isError).toBe(false);
     expect(parsed.costUsd).toBe(0.0042);
+    expect(parsed.actualModel).toBe("claude-sonnet-5");
     expect(parsed.usage).toEqual({
       inputTokens: 5,
       cachedInputTokens: 12000,

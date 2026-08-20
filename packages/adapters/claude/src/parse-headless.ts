@@ -9,6 +9,12 @@ export interface ParsedClaude {
   usage?: DelegationResult["usage"];
   /** What the run cost the account, when the CLI reports it. */
   costUsd?: number;
+  /**
+   * The model that actually ran, from the assistant event — aliases are
+   * account/plan-dependent (e.g. haiku silently resolves to sonnet on some
+   * subscription tiers), so report this, not the requested slug.
+   */
+  actualModel?: string;
 }
 
 interface ClaudeEvent {
@@ -19,6 +25,7 @@ interface ClaudeEvent {
   result?: string;
   total_cost_usd?: number;
   message?: {
+    model?: string;
     content?: Array<{
       type?: string;
       text?: string;
@@ -59,6 +66,9 @@ export function parseClaudeStreamJsonl(text: string): ParsedClaude {
     }
     // Best-effort file-change trail from Edit/Write tool calls.
     if (event.type === "assistant" && Array.isArray(event.message?.content)) {
+      if (parsed.actualModel === undefined && typeof event.message?.model === "string") {
+        parsed.actualModel = event.message.model;
+      }
       for (const block of event.message.content) {
         if (block.type !== "tool_use" || !block.name || !block.input?.file_path) continue;
         if (!/^(Edit|MultiEdit|Write|NotebookEdit)$/.test(block.name)) continue;

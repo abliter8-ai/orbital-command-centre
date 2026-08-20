@@ -61,6 +61,7 @@ const events = [
     type: "assistant",
     message: {
       role: "assistant",
+      model: "claude-sonnet-5",
       content: [{ type: "text", text: brief.includes("PING") ? "PING" : "Wrote docs/note.md" }],
     },
   },

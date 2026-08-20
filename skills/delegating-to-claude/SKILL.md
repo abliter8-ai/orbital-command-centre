@@ -47,11 +47,14 @@ rate-limit burn (not a charge); on API-key auth it is literal dollars.
 
 ## Models
 
-`model` accepts the aliases `sonnet` / `opus` / `haiku` (they track the
-account's current generation) or full model IDs. There is **no effort field** —
-reasoning depth is baked into the model choice. `claude models` is an
-interactive picker, so `scripts/update-models` refreshes only the CLI version
-for this entry; the alias list is curated.
+`model` accepts the aliases `sonnet` / `opus` / `haiku` or full model IDs.
+Aliases are **account/plan-dependent** — on some subscription tiers `haiku`
+silently resolves to sonnet. The result summary therefore reports the model
+that actually ran (from the assistant event), not the requested slug — trust
+that, never the child's self-report. There is **no effort field** — reasoning
+depth is baked into the model choice. `claude models` is an interactive
+picker, so `scripts/update-models` refreshes only the CLI version for this
+entry; the alias list is curated.
 
 ## Errors
 

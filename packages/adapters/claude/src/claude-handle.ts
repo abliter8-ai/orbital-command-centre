@@ -172,7 +172,13 @@ export class ClaudeAgentHandle implements AgentHandle {
         return result;
       }
 
-      const cost = parsed.costUsd !== undefined ? ` ($${parsed.costUsd.toFixed(4)})` : "";
+      const meter = [
+        parsed.costUsd !== undefined ? `$${parsed.costUsd.toFixed(4)}` : undefined,
+        parsed.actualModel,
+      ]
+        .filter(Boolean)
+        .join(", ");
+      const cost = meter === "" ? "" : ` (${meter})`;
       const result: DelegationResult = {
         taskId: task.taskId,
         sessionId,
