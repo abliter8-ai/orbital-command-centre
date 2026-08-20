@@ -18,6 +18,12 @@ export interface AgentPolicy {
   /** Requests above this sandbox level are rejected before any spawn. */
   maxSandbox: SandboxMode;
   defaultModel?: string;
+  /**
+   * "worktree": every delegation runs in a fresh git worktree detached at
+   * HEAD, removed afterwards. Requires the delegation cwd to be a git repo.
+   * Default "none".
+   */
+  isolation?: "none" | "worktree";
 }
 
 export interface OrbitalConfig {
@@ -73,6 +79,9 @@ export function loadConfig(path: string = configPath()): OrbitalConfig {
       const policy = entry as Record<string, unknown>;
       if (typeof policy.enabled === "boolean") config.agents[id].enabled = policy.enabled;
       if (isSandbox(policy.maxSandbox)) config.agents[id].maxSandbox = policy.maxSandbox;
+      if (policy.isolation === "none" || policy.isolation === "worktree") {
+        config.agents[id].isolation = policy.isolation;
+      }
       if (typeof policy.defaultModel === "string" && policy.defaultModel.trim() !== "") {
         config.agents[id].defaultModel = policy.defaultModel.trim();
       }

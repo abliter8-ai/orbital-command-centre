@@ -170,7 +170,7 @@ describe("buildAgentCard", () => {
     const card = buildAgentCard("grok", "http://127.0.0.1:7003");
     expect(card.name).toBe("OCC Grok");
     expect(card.supportedInterfaces[0]?.url).toBe("http://127.0.0.1:7003");
-    expect(card.capabilities?.streaming).toBe(false);
+    expect(card.capabilities?.streaming).toBe(true);
     const skillIds = card.skills.map((skill) => skill.id);
     expect(skillIds).toContain("delegate");
     expect(skillIds).toContain("x-keyword-search");

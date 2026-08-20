@@ -3,6 +3,7 @@ import {
   buildAgentCard,
   createAgentRpcHandler,
   OccAgentExecutor,
+  writeRpcResult,
   type AgentRpcHandler,
 } from "@occ/a2a";
 import {
@@ -16,6 +17,7 @@ import {
 import type { AuditLog } from "./audit.js";
 import type { OrbitalConfig } from "./config.js";
 import { EnforcingExecutor } from "./enforcing-executor.js";
+import { WorktreeHandle, sweepStaleWorktrees, worktreeRoot } from "./worktree.js";
 
 const AGENT_IDS: AgentId[] = ["codex", "cursor", "grok", "antigravity"];
 const AVAILABILITY_TTL_MS = 30_000;
@@ -69,8 +71,14 @@ export function createDaemonServer(deps: DaemonDeps): Server {
     return value;
   };
 
+  // Clean up worktrees orphaned by a previous crashed daemon before serving.
+  void sweepStaleWorktrees(worktreeRoot(), audit).catch(() => undefined);
+
   for (const id of AGENT_IDS) {
-    const handle = deps.handles[id];
+    const handle =
+      config.agents[id].isolation === "worktree"
+        ? new WorktreeHandle(deps.handles[id], { audit })
+        : deps.handles[id];
     const store = new InMemoryTaskStore();
     const card = buildAgentCard(id, `${baseUrl}/agents/${id}`);
     const inner = new OccAgentExecutor({
@@ -168,7 +176,7 @@ export function createDaemonServer(deps: DaemonDeps): Server {
           return;
         }
         if (req.method === "POST" && (sub === "" || sub === "/" || sub === "/rpc")) {
-          sendJson(res, 200, await runtime.rpc(await readBody(req)));
+          await writeRpcResult(res, await runtime.rpc(await readBody(req)));
           return;
         }
         sendJson(res, 404, { error: "not found" });

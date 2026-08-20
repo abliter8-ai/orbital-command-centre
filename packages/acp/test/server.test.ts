@@ -193,6 +193,74 @@ describe("OccAcpAgent cancel routing", () => {
   });
 });
 
+describe("OccAcpAgent streaming", () => {
+  class StreamingHandle extends FakeAgentHandle {
+    override async prompt(
+      session: import("@occ/core").Session,
+      request: import("@occ/core").PromptRequest,
+    ): Promise<import("@occ/core").DelegationResult> {
+      this.prompts.push({ session, request });
+      request.onEvent?.({ kind: "tool_start", text: "command_execution" });
+      request.onEvent?.({ kind: "text", text: "live chunk" });
+      request.onEvent?.({ kind: "tool_end", text: "command_execution" });
+      return { ...this.canned, output: "live chunk", sessionId: session.sessionId };
+    }
+  }
+
+  it("forwards handle events as live session updates without duplicating the final text", async () => {
+    const store = new InMemoryTaskStore();
+    const handle = new StreamingHandle({ output: "live chunk" });
+    const occ = new OccAcpAgent({ handle, store });
+    const updates: Record<string, unknown>[] = [];
+    const client = {
+      notify: async (_method: string, params: unknown) => {
+        updates.push((params as { update: Record<string, unknown> }).update);
+      },
+    };
+
+    const created = await occ.newSession({ cwd: "/tmp", mcpServers: [] });
+    const response = await occ.prompt(
+      { sessionId: created.sessionId, prompt: [{ type: "text", text: "stream me" }] },
+      client,
+    );
+    // Fire-and-forget notifications flush on the next tick.
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(response.stopReason).toBe("end_turn");
+    const chunks = updates.filter((u) => u.sessionUpdate === "agent_message_chunk");
+    // The streamed chunk arrived exactly once; no trailing duplicate.
+    expect(chunks).toHaveLength(1);
+    expect(JSON.stringify(chunks[0])).toContain("live chunk");
+
+    const toolCalls = updates.filter((u) => u.sessionUpdate === "tool_call");
+    expect(toolCalls.some((u) => u.title === "command_execution")).toBe(true);
+    const toolUpdates = updates.filter((u) => u.sessionUpdate === "tool_call_update");
+    expect(toolUpdates.some((u) => u.status === "completed")).toBe(true);
+  });
+
+  it("buffered handles still deliver the result as one final chunk", async () => {
+    const store = new InMemoryTaskStore();
+    const handle = new FakeAgentHandle({ output: "buffered answer" });
+    const occ = new OccAcpAgent({ handle, store });
+    const updates: Record<string, unknown>[] = [];
+    const client = {
+      notify: async (_method: string, params: unknown) => {
+        updates.push((params as { update: Record<string, unknown> }).update);
+      },
+    };
+
+    const created = await occ.newSession({ cwd: "/tmp", mcpServers: [] });
+    await occ.prompt(
+      { sessionId: created.sessionId, prompt: [{ type: "text", text: "hi" }] },
+      client,
+    );
+    const chunks = updates.filter((u) => u.sessionUpdate === "agent_message_chunk");
+    expect(chunks).toHaveLength(1);
+    expect(JSON.stringify(chunks[0])).toContain("buffered answer");
+  });
+});
+
 describe("promptText", () => {
   it("flattens text, resource links and embedded resources", () => {
     const text = promptText([

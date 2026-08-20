@@ -50,7 +50,7 @@ export function buildAgentCard(agentId: AgentId, url: string): AgentCard {
     supportedInterfaces: [{ url, protocolBinding: "JSONRPC", protocolVersion: "1.0", tenant: "" }],
     provider: { organization: "Orbital Command Centre", url: "" },
     version: "0.1.0",
-    capabilities: { streaming: false, pushNotifications: false, extensions: [] },
+    capabilities: { streaming: true, pushNotifications: false, extensions: [] },
     securitySchemes: {},
     securityRequirements: [],
     defaultInputModes: ["text/plain"],

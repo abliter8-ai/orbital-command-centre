@@ -29,7 +29,9 @@ export type AgentRpcHandler = (body: string) => Promise<unknown>;
 
 /**
  * The JSON-RPC core of one agent, for hosts that do their own HTTP routing
- * (the control-plane daemon mounts one of these per agent).
+ * (the control-plane daemon mounts one of these per agent). Streaming methods
+ * (message/stream) resolve to an AsyncGenerator — hosts must write it with
+ * writeRpcResult, which emits SSE.
  */
 export function createAgentRpcHandler(options: A2aHttpOptions): AgentRpcHandler {
   const requestHandler = new DefaultRequestHandler(
@@ -38,22 +40,54 @@ export function createAgentRpcHandler(options: A2aHttpOptions): AgentRpcHandler 
     options.executor,
   );
   const transport = new JsonRpcTransportHandler(requestHandler);
-  return async (body: string) => {
-    const result = await transport.handle(body, new ServerCallContext());
-    if (result && typeof (result as AsyncGenerator).next === "function") {
-      return {
-        jsonrpc: "2.0",
-        error: { code: -32601, message: "Streaming is not supported by this agent." },
-      };
+  return (body: string) => transport.handle(body, new ServerCallContext()) as Promise<unknown>;
+}
+
+function isAsyncGenerator(value: unknown): value is AsyncGenerator<unknown> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as AsyncGenerator).next === "function"
+  );
+}
+
+/**
+ * Write a JSON-RPC result onto an HTTP response. Plain results go as JSON;
+ * async generators (message/stream) go as Server-Sent Events, one `data:`
+ * frame per event, closed when the generator finishes or the client drops.
+ */
+export async function writeRpcResult(res: ServerResponse, result: unknown): Promise<void> {
+  if (!isAsyncGenerator(result)) {
+    sendJson(res, 200, result);
+    return;
+  }
+  res.writeHead(200, {
+    "content-type": "text/event-stream",
+    "cache-control": "no-cache",
+    connection: "keep-alive",
+  });
+  res.on("close", () => {
+    void result.return(undefined);
+  });
+  try {
+    for await (const event of result) {
+      res.write(`data: ${JSON.stringify(event)}\n\n`);
     }
-    return result;
-  };
+  } catch (error) {
+    res.write(
+      `data: ${JSON.stringify({
+        jsonrpc: "2.0",
+        error: { code: -32603, message: error instanceof Error ? error.message : String(error) },
+      })}\n\n`,
+    );
+  }
+  res.end();
 }
 
 /**
  * Minimal A2A HTTP hosting: agent card on the well-known paths, JSON-RPC on
- * POST /. Streaming is not advertised (OCC handles are non-streaming), so
- * message/stream is rejected rather than SSE'd.
+ * POST /. message/stream is served as SSE when the underlying handle streams
+ * (codex, cursor); buffered handles simply deliver their events at the end.
  */
 export function createA2aHttpServer(options: A2aHttpOptions): Server {
   const rpc = createAgentRpcHandler(options);
@@ -67,7 +101,7 @@ export function createA2aHttpServer(options: A2aHttpOptions): Server {
         return;
       }
       if (req.method === "POST" && (url.pathname === "/" || url.pathname === "/rpc")) {
-        sendJson(res, 200, await rpc(await readBody(req)));
+        await writeRpcResult(res, await rpc(await readBody(req)));
         return;
       }
       sendJson(res, 404, { error: "not found" });

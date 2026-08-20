@@ -4,6 +4,12 @@ import type {
   GrokVideoOptions,
   GrokXSearchOptions,
 } from "@occ/adapter-grok";
+import type { CodexReviewOptions, CodexReviewTarget } from "@occ/adapter-codex";
+import {
+  applyResearchAllowRules,
+  checkResearchPermissions,
+  type AgyResearchOptions,
+} from "@occ/adapter-antigravity";
 import type {
   AgentHandle,
   AgentId,
@@ -12,6 +18,7 @@ import type {
   InMemoryTaskStore,
   ReasoningEffort,
   SandboxMode,
+  Session,
   TaskStatus,
 } from "@occ/core";
 import {
@@ -69,6 +76,8 @@ export interface DelegateInput {
   resume_session_id?: string;
   timeout_ms?: number;
   effort?: ReasoningEffort;
+  /** Absolute image paths for the agent to look at. Only Codex accepts image input today; other adapters ignore this. */
+  images?: string[];
 }
 
 export type DelegateToCodexInput = DelegateInput;
@@ -161,6 +170,7 @@ export async function runDelegate(
     sandbox: input.sandbox,
     timeoutMs: input.timeout_ms,
     effort: input.effort,
+    images: input.images,
   });
   store.record(result, {
     brief: input.brief,
@@ -402,4 +412,147 @@ export function runGrokVideo(
   return runGrokNative(registry, store, `Video from ${input.sourceImage}`, (handle) =>
     handle.animateVideo(input),
   );
+}
+
+// ---- Codex review ----------------------------------------------------------
+
+export interface CodexReviewHandle extends AgentHandle {
+  review(session: Session, opts: CodexReviewOptions): Promise<DelegationResult>;
+}
+
+export function isCodexReviewHandle(handle: AgentHandle): handle is CodexReviewHandle {
+  return (
+    handle.agentId === "codex" &&
+    typeof (handle as Partial<CodexReviewHandle>).review === "function"
+  );
+}
+
+function unavailableResult(agentId: AgentId, detail: string, hint: string): DelegationResult {
+  return {
+    taskId: "task_unavailable",
+    sessionId: "none",
+    agentId,
+    status: "failed",
+    cwd: process.cwd(),
+    summary: detail,
+    output: "",
+    filesChanged: [],
+    durationMs: 0,
+    error: { code: "agent_failed", message: detail, hint },
+  };
+}
+
+export async function runCodexReview(
+  registry: AgentRegistry,
+  store: InMemoryTaskStore,
+  input: CodexReviewOptions & { cwd: string },
+): Promise<DelegationResult> {
+  const handle = registry.get("codex");
+  const availability = await handle.isAvailable();
+  if (!availability.available || !availability.authenticated) {
+    return {
+      ...unavailableResult(
+        "codex",
+        availability.detail,
+        availability.available ? HINTS.codex.unauthenticated : HINTS.codex.missing,
+      ),
+      error: {
+        code: availability.available ? "not_authenticated" : "not_available",
+        message: availability.detail,
+        hint: availability.available ? HINTS.codex.unauthenticated : HINTS.codex.missing,
+      },
+    };
+  }
+  if (!isCodexReviewHandle(handle)) {
+    return unavailableResult(
+      "codex",
+      "The registered Codex handle does not expose review.",
+      "Update @occ/adapter-codex to a build with review().",
+    );
+  }
+  const session = await handle.startSession({ cwd: input.cwd, model: input.model });
+  const result = await handle.review(session, input);
+  store.record(result, { brief: `Review: ${input.prompt ?? input.target.kind}` });
+  return result;
+}
+
+// ---- Antigravity research ----------------------------------------------------
+
+export interface AgyResearchHandle extends AgentHandle {
+  research(session: Session, opts: AgyResearchOptions): Promise<DelegationResult>;
+}
+
+export function isAgyResearchHandle(handle: AgentHandle): handle is AgyResearchHandle {
+  return (
+    handle.agentId === "antigravity" &&
+    typeof (handle as Partial<AgyResearchHandle>).research === "function"
+  );
+}
+
+export type AgyResearchPreflight = "check" | "fix" | "skip";
+
+export interface AgyResearchInput extends AgyResearchOptions {
+  cwd: string;
+  model?: string;
+  preflight?: AgyResearchPreflight;
+}
+
+export async function runAgyResearch(
+  registry: AgentRegistry,
+  store: InMemoryTaskStore,
+  input: AgyResearchInput,
+): Promise<DelegationResult> {
+  const handle = registry.get("antigravity");
+  const availability = await handle.isAvailable();
+  if (!availability.available || !availability.authenticated) {
+    return {
+      ...unavailableResult(
+        "antigravity",
+        availability.detail,
+        availability.available ? HINTS.antigravity.unauthenticated : HINTS.antigravity.missing,
+      ),
+      error: {
+        code: availability.available ? "not_authenticated" : "not_available",
+        message: availability.detail,
+        hint: availability.available
+          ? HINTS.antigravity.unauthenticated
+          : HINTS.antigravity.missing,
+      },
+    };
+  }
+  if (!isAgyResearchHandle(handle)) {
+    return unavailableResult(
+      "antigravity",
+      "The registered Antigravity handle does not expose research.",
+      "Update @occ/adapter-antigravity to a build with research().",
+    );
+  }
+
+  const preflight = input.preflight ?? "check";
+  if (preflight !== "skip") {
+    const pre = await checkResearchPermissions();
+    if (pre.missing.length > 0) {
+      if (preflight === "check") {
+        return {
+          ...unavailableResult(
+            "antigravity",
+            `Web tools would be soft-denied: ${pre.missing.join(", ")} not in permissions.allow.`,
+            `Re-run with preflight "fix" to add them (backup made), or add to ${pre.settingsPath}: "permissions": { "allow": [${pre.missing.map((r) => `"${r}"`).join(", ")}] }`,
+          ),
+          error: {
+            code: "not_authenticated",
+            message: `Antigravity web tools would be soft-denied headlessly: missing allow rules ${pre.missing.join(", ")}.`,
+            hint: `Re-run with preflight "fix" to add them automatically (a timestamped backup is written), or add them to permissions.allow in ${pre.settingsPath} yourself.`,
+          },
+        };
+      }
+      // preflight === "fix"
+      await applyResearchAllowRules(pre.settingsPath);
+    }
+  }
+
+  const session = await handle.startSession({ cwd: input.cwd, model: input.model });
+  const result = await handle.research(session, input);
+  store.record(result, { brief: `Research: ${input.question}` });
+  return result;
 }

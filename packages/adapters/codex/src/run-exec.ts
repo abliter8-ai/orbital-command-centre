@@ -9,6 +9,8 @@ export interface RunExecOptions {
   timeoutMs: number;
   lastMessagePath: string;
   signal?: AbortSignal;
+  /** Live stdout chunks, for streaming JSONL event parsing. */
+  onStdoutData?: (chunk: string) => void;
 }
 
 export async function runCodexExec(opts: RunExecOptions): Promise<RunExecOutput> {

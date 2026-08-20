@@ -1,4 +1,11 @@
-import { clampTimeout, resolveCwd, runChild, summariseOutput, validateCwd } from "@occ/adapter-kit";
+import {
+  clampTimeout,
+  lineSplitter,
+  resolveCwd,
+  runChild,
+  summariseOutput,
+  validateCwd,
+} from "@occ/adapter-kit";
 import {
   InMemoryTaskStore,
   isPendingSessionId,
@@ -14,7 +21,7 @@ import {
   type SessionOptions,
 } from "@occ/core";
 import { probeCursorAvailability } from "./availability.js";
-import { normalizeHeadlessOutcome } from "./parse-headless.js";
+import { normalizeHeadlessOutcome, streamEventFromCursorLine } from "./parse-headless.js";
 import {
   DEFAULT_SANDBOX,
   buildHeadlessArgs,
@@ -37,7 +44,8 @@ export class CursorAgentHandle implements AgentHandle {
 
   capabilities(): AgentCapabilities {
     return {
-      streaming: false,
+      // stream-json only in write sandboxes; read-only runs buffered --output-format json.
+      streaming: true,
       resume: true,
       cancel: true,
       sandboxModes: ["read-only", "workspace-write", "danger-full-access"],
@@ -94,6 +102,15 @@ export class CursorAgentHandle implements AgentHandle {
       resumeSessionId: session.sessionId,
     });
 
+    let splitter: ReturnType<typeof lineSplitter> | undefined;
+    if (request.onEvent && format === "stream-json") {
+      const emit = request.onEvent;
+      splitter = lineSplitter((line) => {
+        const event = streamEventFromCursorLine(line);
+        if (event) emit(event);
+      });
+    }
+
     try {
       const ran = await runChild({
         bin: resolveCursorBin(),
@@ -103,7 +120,10 @@ export class CursorAgentHandle implements AgentHandle {
         stdin: request.brief.endsWith("\n") ? request.brief : `${request.brief}\n`,
         env: cursorSpawnEnv(),
         signal: controller.signal,
+        onStdoutData: splitter?.push,
       });
+      // Deliver a final event whose line never got a trailing newline.
+      splitter?.flush();
 
       if (ran.spawnError) {
         const result = this.fail(task.taskId, session, started, {

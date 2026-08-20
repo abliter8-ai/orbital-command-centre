@@ -12,6 +12,8 @@ export interface RunChildOptions {
   signal?: AbortSignal;
   /** Grace period after SIGTERM before SIGKILL. Default 4000. */
   killGraceMs?: number;
+  /** Called with each stdout chunk as it arrives (for live event parsing). */
+  onStdoutData?: (chunk: string) => void;
 }
 
 export interface RunChildOutput {
@@ -25,6 +27,34 @@ export interface RunChildOutput {
 }
 
 export const DEFAULT_KILL_GRACE_MS = 4_000;
+
+/**
+ * Adapt arbitrary stdout chunks into whole lines. Buffers partial lines; call
+ * flush() at process end to emit any trailing unterminated line.
+ */
+export function lineSplitter(onLine: (line: string) => void): {
+  push: (chunk: string) => void;
+  flush: () => void;
+} {
+  let buffer = "";
+  return {
+    push(chunk: string) {
+      buffer += chunk;
+      let idx = buffer.indexOf("\n");
+      while (idx >= 0) {
+        const line = buffer.slice(0, idx).trim();
+        buffer = buffer.slice(idx + 1);
+        if (line !== "") onLine(line);
+        idx = buffer.indexOf("\n");
+      }
+    },
+    flush() {
+      const line = buffer.trim();
+      buffer = "";
+      if (line !== "") onLine(line);
+    },
+  };
+}
 
 export function commandForBin(bin: string, args: string[]): { command: string; args: string[] } {
   if (bin.endsWith(".mjs") || bin.endsWith(".js")) {
@@ -117,7 +147,9 @@ export async function runChild(opts: RunChildOptions): Promise<RunChildOutput> {
     let stdout = "";
     let stderr = "";
     child.stdout?.on("data", (chunk: Buffer) => {
-      stdout += chunk.toString("utf8");
+      const text = chunk.toString("utf8");
+      stdout += text;
+      opts.onStdoutData?.(text);
     });
     child.stderr?.on("data", (chunk: Buffer) => {
       stderr += chunk.toString("utf8");

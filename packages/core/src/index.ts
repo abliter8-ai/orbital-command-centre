@@ -11,6 +11,7 @@ export type {
   SandboxMode,
   Session,
   SessionOptions,
+  StreamEvent,
   TaskStatus,
 } from "./types.js";
 

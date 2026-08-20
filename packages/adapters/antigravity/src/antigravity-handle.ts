@@ -15,8 +15,17 @@ import {
   type SessionOptions,
 } from "@occ/core";
 import { probeAgyAvailability } from "./availability.js";
+import {
+  buildResearchBrief,
+  type AgyResearchBriefOptions,
+} from "./native.js";
 import { parseAgyJson } from "./parse-json.js";
 import { DEFAULT_SANDBOX, buildHeadlessArgs, resolveAgyBin } from "./spawn-args.js";
+
+export interface AgyResearchOptions extends AgyResearchBriefOptions {
+  effort?: PromptRequest["effort"];
+  timeoutMs?: number;
+}
 
 const execFileAsync = promisify(execFile);
 
@@ -180,6 +189,20 @@ export class AntigravityAgentHandle implements AgentHandle {
     } finally {
       this.inflight.delete(task.taskId);
     }
+  }
+
+  /**
+   * Native web research (google_search + read_url). Runs workspace-write so
+   * web tools are not gated by plan mode; the brief forbids edits. Permission
+   * pre-flight is the caller's job (facade) — see native.ts.
+   */
+  async research(session: Session, opts: AgyResearchOptions): Promise<DelegationResult> {
+    return this.prompt(session, {
+      brief: buildResearchBrief(opts),
+      sandbox: "workspace-write",
+      effort: opts.effort,
+      timeoutMs: opts.timeoutMs,
+    });
   }
 
   async cancel(taskId: string): Promise<void> {

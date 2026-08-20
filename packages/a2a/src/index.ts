@@ -3,6 +3,7 @@ export { OccAgentExecutor, messageText, type OccExecutorOptions } from "./execut
 export {
   createA2aHttpServer,
   createAgentRpcHandler,
+  writeRpcResult,
   type A2aHttpOptions,
   type AgentRpcHandler,
 } from "./http.js";

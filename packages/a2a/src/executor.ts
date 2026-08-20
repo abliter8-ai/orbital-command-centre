@@ -13,6 +13,7 @@ import {
   type ReasoningEffort,
   type SandboxMode,
   type Session,
+  type StreamEvent,
 } from "@occ/core";
 
 const SANDBOXES: readonly SandboxMode[] = ["read-only", "workspace-write", "danger-full-access"];
@@ -95,10 +96,62 @@ export class OccAgentExecutor implements AgentExecutor {
       }),
     );
 
+    // Progressive publishing: streaming handles (codex, cursor) emit text as
+    // appended artifact chunks and tool activity as working-status updates.
+    // Buffered handles never call onEvent and get the single-shot artifact.
+    const streamArtifactId = `result-${taskId}`;
+    let streamedText = false;
+    const onEvent = (event: StreamEvent): void => {
+      if (event.kind === "text") {
+        streamedText = true;
+        eventBus.publish(
+          AgentEvent.artifactUpdate({
+            taskId,
+            contextId,
+            artifact: {
+              artifactId: streamArtifactId,
+              name: "result",
+              description: "",
+              parts: [
+                {
+                  content: { $case: "text", value: event.text },
+                  metadata: undefined,
+                  filename: "",
+                  mediaType: "text/plain",
+                },
+              ],
+              metadata: undefined,
+              extensions: [],
+            },
+            append: true,
+            lastChunk: false,
+            metadata: undefined,
+          }),
+        );
+        return;
+      }
+      eventBus.publish(
+        AgentEvent.statusUpdate({
+          taskId,
+          contextId,
+          status: {
+            state: TaskState.TASK_STATE_WORKING,
+            message: agentMessage(
+              taskId,
+              contextId,
+              `${event.kind === "tool_start" ? "tool started" : "tool finished"}: ${event.text}`,
+            ),
+            timestamp: new Date().toISOString(),
+          },
+          metadata: undefined,
+        }),
+      );
+    };
+
     let result: DelegationResult;
     try {
       const session = await this.sessionFor(contextId, cwd, model);
-      const running = this.handle.prompt(session, { brief, sandbox, effort });
+      const running = this.handle.prompt(session, { brief, sandbox, effort, onEvent });
       // Handles register the task synchronously before their first await.
       const occTask = this.store
         .list({ status: ["queued", "running"] })
@@ -122,7 +175,7 @@ export class OccAgentExecutor implements AgentExecutor {
       this.occTaskByA2aTask.delete(taskId);
     }
 
-    if (result.status === "succeeded") {
+    if (result.status === "succeeded" && !streamedText) {
       eventBus.publish(
         AgentEvent.artifactUpdate({
           taskId,
@@ -151,7 +204,31 @@ export class OccAgentExecutor implements AgentExecutor {
           metadata: undefined,
         }),
       );
+    }
 
+    if (result.status === "succeeded" && streamedText) {
+      // Close the streamed artifact: lastChunk marker with the run metadata.
+      eventBus.publish(
+        AgentEvent.artifactUpdate({
+          taskId,
+          contextId,
+          artifact: {
+            artifactId: streamArtifactId,
+            name: "result",
+            description: result.summary,
+            parts: [],
+            metadata: {
+              filesChanged: result.filesChanged,
+              durationMs: result.durationMs,
+              occSessionId: result.sessionId,
+            },
+            extensions: [],
+          },
+          append: true,
+          lastChunk: true,
+          metadata: undefined,
+        }),
+      );
     }
 
     const terminal =

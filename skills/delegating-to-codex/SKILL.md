@@ -85,14 +85,16 @@ Do not pass `effort: "ultra"` or invent `reasoning_level`.
 
 Codex's strength is the sandboxed code loop itself: shell, file edits, and
 test runs inside the OCC `sandbox` policy — that is the native tooling, and it
-is why Codex gets the hard implementation briefs. CLI features that exist but
-OCC does **not** expose yet:
+is why Codex gets the hard implementation briefs. Two native capabilities are
+first-class OCC tools:
 
-- `codex review` (non-interactive code review subcommand) — approximate with a
-  review brief: "Review the diff in this repo. Do not edit. Report findings by
-  severity."
-- `codex exec -i <image>` (image attach) — describe the image content in the
-  brief instead.
+- **`codex_review`** — the real `codex exec review` subcommand. Targets:
+  `uncommitted` (staged + unstaged + untracked), `base` + `ref` (branch),
+  `commit` + `ref` (sha), or `custom` + `prompt` (your own instructions). The
+  CLI forbids mixing a target flag with a custom prompt — `prompt` only
+  applies to `custom`. Reviews never edit by design.
+- **`images`** — `delegate_to_codex` takes `images: ["/abs/path.png", …]`
+  (mapped to `codex exec -i`). Screenshots, mocks, diagrams, error captures.
 
 Do not promise Codex web search or media generation — route those to Grok or
 Antigravity (`occ_capabilities` shows who owns what).

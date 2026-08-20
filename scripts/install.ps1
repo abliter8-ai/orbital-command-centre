@@ -162,6 +162,8 @@ const tools = [
   "mcp__orbital__grok_x_search",
   "mcp__orbital__grok_imagine",
   "mcp__orbital__grok_video",
+  "mcp__orbital__codex_review",
+  "mcp__orbital__antigravity_research",
 ];
 let settings = {};
 try { settings = JSON.parse(fs.readFileSync(file, "utf8")); } catch {}

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { buildSpawnOptions, commandForBin, runChild } from "../src/run-child.js";
+import { buildSpawnOptions, commandForBin, lineSplitter, runChild } from "../src/run-child.js";
 
 const echoScript = join(dirname(fileURLToPath(import.meta.url)), "echo-stdin.mjs");
 
@@ -63,4 +63,27 @@ describe("runChild", () => {
     },
     10_000,
   );
+});
+
+describe("lineSplitter", () => {
+  it("joins partial chunks into whole lines", () => {
+    const lines: string[] = [];
+    const s = lineSplitter((line) => lines.push(line));
+    s.push('{"a":');
+    s.push('1}\n{"b":2');
+    s.push('}\n');
+    expect(lines).toEqual(['{"a":1}', '{"b":2}']);
+    s.push("tail-without-newline");
+    expect(lines).toHaveLength(2);
+    s.flush();
+    expect(lines).toEqual(['{"a":1}', '{"b":2}', "tail-without-newline"]);
+  });
+
+  it("skips blank lines and handles CRLF", () => {
+    const lines: string[] = [];
+    const s = lineSplitter((line) => lines.push(line));
+    s.push("one\r\n\r\n  \ntwo\n");
+    s.flush();
+    expect(lines).toEqual(["one", "two"]);
+  });
 });

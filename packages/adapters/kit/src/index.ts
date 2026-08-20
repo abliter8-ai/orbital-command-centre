@@ -10,6 +10,7 @@ export {
   buildSpawnOptions,
   commandForBin,
   killTree,
+  lineSplitter,
   runChild,
   type RunChildOptions,
   type RunChildOutput,

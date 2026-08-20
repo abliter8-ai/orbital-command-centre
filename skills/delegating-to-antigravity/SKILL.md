@@ -21,7 +21,9 @@ There is **no `--cwd` flag** — pass `cwd` to the OCC tool; OCC spawns in that 
 
 - User asked for **Antigravity** / **agy** / Gemini-via-Google-agent-CLI
 - Gemini 3.x or Claude-on-agy models
-- Web research via agy's `google_search` / `read_url` (name them in the brief)
+- Web research — prefer the first-class **`antigravity_research`** tool (grounded
+  `google_search` + `read_url` brief, optional `fetch_pages` and `subagents`),
+  which permission-pre-flights for you
 
 **Do not use** when the user asked for Codex, Cursor, or Grok.
 
@@ -66,15 +68,19 @@ Soft-deny + exit 0 is the failure mode: tests never ran but the tool "succeeded"
 | subagents | Parallel research fan-out | Works headless; ask for it in the brief |
 
 Web actions default to **Ask**, which headless turns into a silent soft-deny
-(exit 0, no work, notice on stderr). Two fixes:
+(exit 0, no work, notice on stderr). Three fixes:
 
-1. Pre-allow in `~/.gemini/antigravity-cli/settings.json`:
+1. `antigravity_research` with `preflight: "check"` (default) tells you exactly
+   which rules are missing; `"fix"` merges `read_url(*)` into
+   `~/.gemini/antigravity-cli/settings.json` with a timestamped backup —
+   including when the existing file is malformed (original bytes preserved).
+2. Pre-allow by hand in `~/.gemini/antigravity-cli/settings.json`:
 
 ```json
 { "permissions": { "allow": ["read_url(*)"] } }
 ```
 
-2. Or `sandbox: "danger-full-access"` (adds `--dangerously-skip-permissions`)
+3. Or `sandbox: "danger-full-access"` (adds `--dangerously-skip-permissions`)
 in a trusted cwd.
 
 Recipes and flag details: `docs/source-refs/agy-tools-ref.md`. For live **X**

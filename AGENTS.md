@@ -18,10 +18,10 @@ The internal contract is an **AgentHandle** (`packages/core`). MCP, ACP and A2A 
 
 All four adapters and all three surfaces are built and live-verified, plus the control-plane daemon:
 
-- **MCP façade** (`@occ/mcp-facade`): `occ_health`, `occ_models`, `occ_tasks`, `occ_cancel`, `occ_capabilities`, `delegate_to_{codex,cursor,grok,antigravity}`, and first-class Grok native tools `grok_x_search`, `grok_imagine`, `grok_video`.
-- **ACP** (`@occ/acp`): `occ-acp --agent <id>` over stdio; session modes map to OCC sandboxes.
-- **A2A** (`@occ/a2a`): `occ-a2a --agent <id> --port N`; agent cards generated from the capability profile; `SendMessage` / `GetTask` / `CancelTask` (no streaming — advertised as such).
-- **Control plane** (`@occ/control-plane`): `orbital up|down|status|audit|logs` — one loopback port hosting all agents under `/agents/<id>`, registry (`/v1/registry`), policy mediation (`~/.occ/orbital.json`: `enabled`, `maxSandbox`, `defaultModel`), append-only audit log (`~/.occ/audit.jsonl`).
+- **MCP façade** (`@occ/mcp-facade`): `occ_health`, `occ_models`, `occ_tasks`, `occ_cancel`, `occ_capabilities`, `delegate_to_{codex,cursor,grok,antigravity}` (Codex takes `images`), and first-class native tools `codex_review`, `antigravity_research` (permission pre-flight), `grok_x_search`, `grok_imagine`, `grok_video`.
+- **ACP** (`@occ/acp`): `occ-acp --agent <id>` over stdio; session modes map to OCC sandboxes. Streaming handles (Codex, Cursor) emit live `tool_call` updates and `agent_message_chunk`s; buffered handles deliver one chunk at turn end.
+- **A2A** (`@occ/a2a`): `occ-a2a --agent <id> --port N`; agent cards generated from the capability profile; `SendMessage` / `SendStreamingMessage` (SSE) / `GetTask` / `CancelTask`, cards advertise `streaming: true`.
+- **Control plane** (`@occ/control-plane`): `orbital up|down|status|audit|logs` — one loopback port hosting all agents under `/agents/<id>`, registry (`/v1/registry`), policy mediation (`~/.occ/orbital.json`: `enabled`, `maxSandbox`, `defaultModel`, `isolation`), append-only audit log (`~/.occ/audit.jsonl`). `isolation: "worktree"` runs each delegation in a throwaway `git worktree` detached at HEAD (created under `~/.occ/worktrees`, removed after; stale ones swept at startup).
 - **Model catalog** live-probed from the installed CLIs into `~/.occ/model-catalog.json` (24h staleness self-refresh; `scripts/update-models.sh|ps1`).
 
 ## Package Layout
@@ -57,6 +57,8 @@ Keep `core` free of concrete protocol and CLI dependencies. Façades depend on a
 
 - OCC never passes `--dangerously-bypass-approvals-and-sandbox` (Codex). `danger-full-access` maps to each CLI's own documented full-access flags only.
 - Codex write path is `--approve-for-me` (0.148 refuses `--sandbox` combined with it).
+- `codex exec review` takes a narrow flag set: no `--cd`, no `--sandbox`, and the target flags (`--uncommitted` / `--base` / `--commit`) are mutually exclusive with a custom `[PROMPT]`. OCC emits a prompt only for `target: custom`.
+- Streaming is event-level, not token-level: `PromptRequest.onEvent` carries `text` / `tool_start` / `tool_end`. Codex and Cursor emit (Cursor only in write sandboxes — read-only is buffered `--output-format json`); Grok and Antigravity stay buffered and advertise `streaming: false` on the handle.
 - Cursor write path is `cursor-agent -p --force --trust` with stream-json; read-only is `--mode ask`. Spawned Cursor processes set `AGENT_CLI_CREDENTIAL_STORE=file` (locked macOS keychain workaround).
 - Grok headless is `grok --no-leader -p --output-format json --verbatim`; write path adds `--always-approve`; OS `--sandbox` is **not** passed (hangs 1.0.5). X-search/Imagine briefs must not run under `read-only` (tool approval hang) — the first-class tools handle this.
 - Antigravity web tools soft-deny without `permissions.allow` rules in the user's settings; document, don't work around.

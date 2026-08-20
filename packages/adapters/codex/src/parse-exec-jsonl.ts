@@ -1,4 +1,4 @@
-import type { DelegationResult, FileChange } from "@occ/core";
+import type { DelegationResult, FileChange, StreamEvent } from "@occ/core";
 
 export interface ParsedExec {
   threadId?: string;
@@ -96,6 +96,33 @@ export function parseExecJsonl(text: string): ParsedExec {
   }
 
   return parsed;
+}
+
+/**
+ * Map one live `codex exec --json` line to a StreamEvent. Codex emits no
+ * token deltas; the stream is per-item: tool calls starting/completing and
+ * the agent message when it lands. Returns null for lines that carry no
+ * user-facing progress (thread/turn bookkeeping, usage, junk).
+ */
+export function streamEventFromExecLine(line: string): StreamEvent | null {
+  let event: ExecEvent;
+  try {
+    event = JSON.parse(line) as ExecEvent;
+  } catch {
+    return null;
+  }
+  const item = event.item;
+  if (event.type === "item.started" && item?.type && item.type !== "agent_message") {
+    return { kind: "tool_start", text: item.type };
+  }
+  if (event.type === "item.completed" && item?.type) {
+    if (item.type === "agent_message" && typeof item.text === "string") {
+      return { kind: "text", text: item.text };
+    }
+    if (item.type === "error") return null; // surfaced via parsed.fatalError at the end
+    return { kind: "tool_end", text: item.type };
+  }
+  return null;
 }
 
 export { summariseOutput } from "@occ/adapter-kit";

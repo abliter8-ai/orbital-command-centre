@@ -1,3 +1,6 @@
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   AgentRegistry,
   FakeAgentHandle,
@@ -15,8 +18,12 @@ import { nativeCapabilities } from "../src/capabilities.js";
 import {
   buildDelegateDescriptions,
   formatModelSection,
+  isAgyResearchHandle,
+  isCodexReviewHandle,
   isGrokNativeHandle,
+  runAgyResearch,
   runCancel,
+  runCodexReview,
   runDelegate,
   runDelegateToCodex,
   runGrokImagine,
@@ -25,7 +32,10 @@ import {
   runHealth,
   runListTasks,
   runModels,
+  type AgyResearchOptions,
+  type CodexReviewOptions,
 } from "../src/tools.js";
+import type { Session } from "@occ/core";
 
 function deps(handle = new FakeAgentHandle()) {
   const registry = new AgentRegistry();
@@ -282,6 +292,128 @@ describe("grok native tools", () => {
     });
     expect(missing.error?.code).toBe("agent_failed");
     expect(missing.error?.hint).toMatch(/adapter-grok/);
+  });
+});
+
+class FakeCodexReviewHandle extends FakeAgentHandle {
+  readonly calls: { opts: CodexReviewOptions }[] = [];
+
+  constructor() {
+    super({ agentId: "codex", summary: "review canned", output: "review canned" });
+  }
+
+  async review(_session: Session, opts: CodexReviewOptions): Promise<DelegationResult> {
+    this.calls.push({ opts });
+    return { ...this.canned, agentId: "codex", status: "succeeded" };
+  }
+}
+
+describe("codex_review tool", () => {
+  it("detects the structural review interface", () => {
+    expect(isCodexReviewHandle(new FakeCodexReviewHandle())).toBe(true);
+    expect(isCodexReviewHandle(new FakeAgentHandle({ agentId: "codex" }))).toBe(false);
+    expect(isCodexReviewHandle(new FakeGrokNativeHandle())).toBe(false);
+  });
+
+  it("routes a review with target and records the task", async () => {
+    const handle = new FakeCodexReviewHandle();
+    const { registry, store } = deps(handle);
+    const result = await runCodexReview(registry, store, {
+      target: { kind: "base", branch: "main" },
+      prompt: "Focus on auth.",
+      cwd: "/tmp",
+    });
+    expect(result.status).toBe("succeeded");
+    expect(handle.calls[0]?.opts.target).toEqual({ kind: "base", branch: "main" });
+    expect(store.get(result.taskId)?.status).toBe("succeeded");
+  });
+
+  it("fails fast when codex lacks review()", async () => {
+    const { registry, store } = deps(new FakeAgentHandle({ agentId: "codex" }));
+    const result = await runCodexReview(registry, store, {
+      target: { kind: "uncommitted" },
+      cwd: "/tmp",
+    });
+    expect(result.error?.code).toBe("agent_failed");
+    expect(result.error?.hint).toMatch(/adapter-codex/);
+  });
+});
+
+class FakeAgyResearchHandle extends FakeAgentHandle {
+  readonly calls: { opts: AgyResearchOptions }[] = [];
+
+  constructor() {
+    super({ agentId: "antigravity", summary: "research canned", output: "research canned" });
+  }
+
+  async research(_session: Session, opts: AgyResearchOptions): Promise<DelegationResult> {
+    this.calls.push({ opts });
+    return { ...this.canned, agentId: "antigravity", status: "succeeded" };
+  }
+}
+
+describe("antigravity_research tool", () => {
+  it("detects the structural research interface", () => {
+    expect(isAgyResearchHandle(new FakeAgyResearchHandle())).toBe(true);
+    expect(isAgyResearchHandle(new FakeAgentHandle({ agentId: "antigravity" }))).toBe(false);
+  });
+
+  it("routes research when permissions are in place (skip preflight)", async () => {
+    const handle = new FakeAgyResearchHandle();
+    const { registry, store } = deps(handle);
+    const result = await runAgyResearch(registry, store, {
+      question: "What shipped in Node 24?",
+      cwd: "/tmp",
+      preflight: "skip",
+    });
+    expect(result.status).toBe("succeeded");
+    expect(handle.calls[0]?.opts.question).toBe("What shipped in Node 24?");
+    expect(store.get(result.taskId)?.status).toBe("succeeded");
+  });
+
+  it("check preflight fails fast with the exact fix when rules are missing", async () => {
+    const handle = new FakeAgyResearchHandle();
+    const { registry, store } = deps(handle);
+    const dir = await mkdtemp(join(tmpdir(), "occ-agy-preflight-"));
+    process.env.OCC_AGY_SETTINGS = join(dir, "settings.json");
+    try {
+      const result = await runAgyResearch(registry, store, {
+        question: "x",
+        cwd: "/tmp",
+        preflight: "check",
+      });
+      expect(result.status).toBe("failed");
+      expect(result.error?.message).toMatch(/soft-denied/);
+      expect(result.error?.hint).toMatch(/preflight "fix"/);
+      expect(handle.calls).toHaveLength(0);
+    } finally {
+      delete process.env.OCC_AGY_SETTINGS;
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("fix preflight writes the allow rule then runs", async () => {
+    const handle = new FakeAgyResearchHandle();
+    const { registry, store } = deps(handle);
+    const dir = await mkdtemp(join(tmpdir(), "occ-agy-preflight-"));
+    const settingsPath = join(dir, "settings.json");
+    process.env.OCC_AGY_SETTINGS = settingsPath;
+    try {
+      const result = await runAgyResearch(registry, store, {
+        question: "x",
+        cwd: "/tmp",
+        preflight: "fix",
+      });
+      expect(result.status).toBe("succeeded");
+      expect(handle.calls).toHaveLength(1);
+      const written = JSON.parse(await readFile(settingsPath, "utf8")) as {
+        permissions: { allow: string[] };
+      };
+      expect(written.permissions.allow).toContain("read_url(*)");
+    } finally {
+      delete process.env.OCC_AGY_SETTINGS;
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });
 

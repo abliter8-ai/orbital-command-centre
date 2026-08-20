@@ -6,6 +6,7 @@ import type {
   ReasoningEffort,
   SandboxMode,
   Session,
+  StreamEvent,
 } from "@occ/core";
 
 const SANDBOX_MODES: { id: SandboxMode; name: string; description: string }[] = [
@@ -44,9 +45,11 @@ export interface OccAcpAgentOptions {
 
 /**
  * Exposes one OCC AgentHandle as an ACP agent (Zed-style editor integration).
- * ACP session modes map onto OCC sandbox modes. Handles are non-streaming, so
- * the turn emits a pending tool_call while the delegation runs and the result
- * lands as a single agent_message_chunk.
+ * ACP session modes map onto OCC sandbox modes. The turn emits a pending
+ * tool_call while the delegation runs; handles with streaming: true (codex,
+ * cursor) additionally stream per-item progress — tool_call updates as tools
+ * fire and agent_message_chunk as assistant messages land. Buffered handles
+ * deliver the result as a single chunk at the end.
  */
 export class OccAcpAgent {
   private readonly handle: AgentHandle;
@@ -135,12 +138,61 @@ export class OccAcpAgent {
       },
     });
 
+    // Live progress: text streams as message chunks; tool activity as
+    // subordinate tool_calls. Fire-and-forget — a dropped notification must
+    // not fail the delegation.
+    let streamedText = false;
+    let toolSeq = 0;
+    const openTools: string[] = [];
+    const onEvent = (event: StreamEvent): void => {
+      if (event.kind === "text") {
+        streamedText = true;
+        void client
+          .notify(acp.methods.client.session.update, {
+            sessionId: params.sessionId,
+            update: {
+              sessionUpdate: "agent_message_chunk",
+              content: { type: "text", text: event.text },
+            },
+          })
+          .catch(() => undefined);
+        return;
+      }
+      if (event.kind === "tool_start") {
+        const id = `occ-tool-${toolSeq++}`;
+        openTools.push(id);
+        void client
+          .notify(acp.methods.client.session.update, {
+            sessionId: params.sessionId,
+            update: {
+              sessionUpdate: "tool_call",
+              toolCallId: id,
+              title: event.text,
+              kind: "execute",
+              status: "in_progress",
+            },
+          })
+          .catch(() => undefined);
+        return;
+      }
+      const id = openTools.shift();
+      if (id) {
+        void client
+          .notify(acp.methods.client.session.update, {
+            sessionId: params.sessionId,
+            update: { sessionUpdate: "tool_call_update", toolCallId: id, status: "completed" },
+          })
+          .catch(() => undefined);
+      }
+    };
+
     let result: DelegationResult;
     try {
       const running = this.handle.prompt(state.session, {
         brief,
         sandbox: state.mode,
         effort: this.defaults.effort,
+        onEvent,
       });
       // Handles register the task synchronously before their first await, so
       // the running record is already visible for cancel routing.
@@ -181,13 +233,17 @@ export class OccAcpAgent {
         status: ok ? "completed" : "failed",
       },
     });
-    await client.notify(acp.methods.client.session.update, {
-      sessionId: params.sessionId,
-      update: {
-        sessionUpdate: "agent_message_chunk",
-        content: { type: "text", text },
-      },
-    });
+    // When the handle streamed the message live, the chunks already carry it —
+    // only buffered handles need the final full-text chunk.
+    if (!streamedText || !ok) {
+      await client.notify(acp.methods.client.session.update, {
+        sessionId: params.sessionId,
+        update: {
+          sessionUpdate: "agent_message_chunk",
+          content: { type: "text", text },
+        },
+      });
+    }
     return { stopReason: ok ? "end_turn" : "refusal" };
   }
 

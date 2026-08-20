@@ -38,11 +38,29 @@ export interface SessionOptions {
   model?: string;
 }
 
+/**
+ * Incremental progress from a running delegation. Event-level, not
+ * token-level: adapters emit what their CLI's stream actually carries
+ * (assistant messages as they complete, tool call starts/ends).
+ */
+export interface StreamEvent {
+  kind: "text" | "tool_start" | "tool_end";
+  /** text: the assistant text chunk. tool_*: short tool label. */
+  text: string;
+}
+
 export interface PromptRequest {
   brief: string;
   sandbox?: SandboxMode;
   timeoutMs?: number;
   effort?: ReasoningEffort;
+  /** Absolute paths to images for the agent to look at. Adapters that cannot accept image input ignore this. */
+  images?: string[];
+  /**
+   * Called as the delegation produces incremental output. Only invoked by
+   * adapters whose capabilities() report streaming: true.
+   */
+  onEvent?: (event: StreamEvent) => void;
 }
 
 export interface FileChange {

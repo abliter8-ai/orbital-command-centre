@@ -5,7 +5,9 @@ import type { AgentId } from "@occ/core";
 
 export interface AuditEntry {
   ts: string;
-  agentId: AgentId;
+  /** "daemon" for lifecycle events not attributable to one agent (worktree sweep). */
+  agentId: AgentId | "daemon";
+  /** "-" for lifecycle events that are not tied to one task (worktree sweep). */
   a2aTaskId: string;
   contextId: string;
   sandbox: string;
@@ -14,6 +16,9 @@ export interface AuditEntry {
   status: string;
   durationMs: number;
   error?: string;
+  /** Lifecycle event name (e.g. worktree.create / worktree.remove / worktree.sweep). */
+  event?: string;
+  detail?: string;
 }
 
 export function auditPath(): string {

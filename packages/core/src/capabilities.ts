@@ -39,14 +39,14 @@ export function nativeCapabilities(): Record<AgentId, AgentNativeProfile> {
         {
           name: "codex review",
           kind: "code",
-          summary: "Non-interactive code review subcommand (CLI 0.148).",
-          invoke: "not exposed by OCC yet — follow-on; use delegate_to_codex with a review brief",
+          summary: "First-class non-interactive code review: uncommitted / vs base branch / one commit / custom. Always read-only.",
+          invoke: "codex_review",
         },
         {
           name: "image-input",
           kind: "media",
-          summary: "Attach images to the prompt (codex exec -i).",
-          invoke: "not exposed by OCC yet",
+          summary: "Attach images to the prompt (codex exec -i): screenshots, mockups, error dialogs.",
+          invoke: 'delegate_to_codex with images: ["/abs/path.png"]',
         },
       ],
     },
@@ -137,17 +137,17 @@ export function nativeCapabilities(): Record<AgentId, AgentNativeProfile> {
         {
           name: "google_search",
           kind: "search",
-          summary: "Grounded public web search.",
-          invoke: "delegate_to_antigravity — name google_search in the brief",
-          notes: "Soft-denied unless pre-allowed; see notes on read_url.",
+          summary: "Grounded public web search (the real Google index).",
+          invoke: "antigravity_research",
+          notes: "First-class tool runs a permission pre-flight (check/fix/skip) for the read_url allow rule.",
         },
         {
           name: "read_url",
           kind: "search",
           summary: "Fetch and process a page (grounded fetch).",
-          invoke: "delegate_to_antigravity — name read_url in the brief",
+          invoke: "antigravity_research with fetch_pages, or delegate_to_antigravity — name read_url in the brief",
           notes:
-            'Default Ask → soft-denied headless. Pre-allow in ~/.gemini/antigravity-cli/settings.json, e.g. "read_url(*)", or use sandbox danger-full-access.',
+            'Default Ask → soft-denied headless. antigravity_research pre-flights this; otherwise pre-allow "read_url(*)" in ~/.gemini/antigravity-cli/settings.json.',
         },
         {
           name: "execute_url (browser)",

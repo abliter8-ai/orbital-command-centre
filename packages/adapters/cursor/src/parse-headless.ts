@@ -1,4 +1,4 @@
-import type { FileChange } from "@occ/core";
+import type { FileChange, StreamEvent } from "@occ/core";
 
 export interface CursorResultObject {
   type?: string;
@@ -51,6 +51,41 @@ export function parseStreamJsonl(text: string): unknown[] {
     }
   }
   return events;
+}
+
+/**
+ * Map one live cursor-agent stream-json line to a StreamEvent. Assistant
+ * messages arrive whole (no token deltas); tool calls arrive as
+ * started/completed pairs. Returns null for bookkeeping lines.
+ */
+export function streamEventFromCursorLine(line: string): StreamEvent | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(line);
+  } catch {
+    return null;
+  }
+  const rec = asRecord(parsed);
+  if (!rec) return null;
+
+  if (rec.type === "assistant") {
+    const message = asRecord(rec.message);
+    const content = Array.isArray(message?.content) ? message.content : [];
+    const text = content
+      .map((block) => asRecord(block))
+      .filter((block) => block?.type === "text" && typeof block.text === "string")
+      .map((block) => block!.text as string)
+      .join("");
+    return text === "" ? null : { kind: "text", text };
+  }
+
+  if (rec.type === "tool_call") {
+    const toolCall = asRecord(rec.tool_call);
+    const name = toolCall ? (Object.keys(toolCall)[0] ?? "tool") : "tool";
+    if (rec.subtype === "started") return { kind: "tool_start", text: name };
+    if (rec.subtype === "completed") return { kind: "tool_end", text: name };
+  }
+  return null;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {

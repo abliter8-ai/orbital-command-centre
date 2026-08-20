@@ -51,6 +51,19 @@ describe("CodexAgentHandle", () => {
     expect(result.error?.message).toMatch(/stream ended unexpectedly/);
   });
 
+  it("runs a review through the same pipeline", async () => {
+    process.env.CODEX_BIN = fakeBin;
+    const handle = new CodexAgentHandle();
+    const session = await handle.startSession({ cwd: process.cwd() });
+    const result = await handle.review(session, {
+      target: { kind: "uncommitted" },
+      prompt: "Focus on correctness.",
+    });
+    expect(result.status).toBe("succeeded");
+    expect(result.output).toBe("Updated the docs and added examples.");
+    expect(result.error).toBeUndefined();
+  });
+
   it("rejects a missing cwd", async () => {
     process.env.CODEX_BIN = fakeBin;
     const handle = new CodexAgentHandle();

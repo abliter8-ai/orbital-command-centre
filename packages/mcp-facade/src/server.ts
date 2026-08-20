@@ -11,7 +11,9 @@ import { nativeCapabilities } from "./capabilities.js";
 import { formatDelegationMarkdown } from "./format.js";
 import {
   buildDelegateDescriptions,
+  runAgyResearch,
   runCancel,
+  runCodexReview,
   runDelegate,
   runGrokImagine,
   runGrokVideo,
@@ -70,6 +72,12 @@ const codexDelegateInput = {
     .optional()
     .describe(
       "Reasoning effort → Codex model_reasoning_effort. Omit for config default (medium). low=fast, medium=everyday, high=complex, xhigh=extra high, max=hardest single-task. Ultra (subagents) is not this field.",
+    ),
+  images: z
+    .array(z.string())
+    .optional()
+    .describe(
+      "Absolute paths to images Codex should look at (codex exec -i). Screenshots, mockups, error dialogs. Max 4.",
     ),
 };
 
@@ -322,6 +330,97 @@ export function createOccServer(
         mediaSaved: mediaPaths.length > 0,
         markdown: formatDelegationMarkdown(result),
       };
+    },
+  );
+
+  server.tool(
+    {
+      name: "codex_review",
+      description:
+        "Run Codex's first-class code review (codex exec review) against a repo: uncommitted changes, a diff vs a base branch, a single commit, or a custom review prompt. Always read-only. Returns the review findings as the output. Use this instead of delegate_to_codex when the job is reviewing changes, not making them.",
+      input: z.object({
+        target: z
+          .enum(["uncommitted", "base", "commit", "custom"])
+          .describe(
+            "What to review: uncommitted = staged+unstaged+untracked; base = diff vs a branch; commit = one SHA; custom = only your prompt.",
+          ),
+        ref: z
+          .string()
+          .optional()
+          .describe("Branch name when target=base, SHA when target=commit."),
+        prompt: z
+          .string()
+          .optional()
+          .describe(
+            "Custom review instructions. Only used with target=custom — the CLI forbids mixing a prompt with uncommitted/base/commit.",
+          ),
+        cwd: z
+          .string()
+          .optional()
+          .describe("Repo to review. Defaults to the MCP server process cwd."),
+        model: z.string().optional().describe("Codex model slug from occ_models. Omit for config default."),
+        effort: z.enum(["low", "medium", "high", "xhigh", "max"]).optional(),
+        timeout_ms: z.number().int().min(1_000).max(1_800_000).optional(),
+      }),
+    },
+    async (input) => {
+      const target =
+        input.target === "base"
+          ? { kind: "base" as const, branch: input.ref ?? "main" }
+          : input.target === "commit"
+            ? { kind: "commit" as const, sha: input.ref ?? "HEAD" }
+            : input.target === "custom"
+              ? { kind: "custom" as const }
+              : { kind: "uncommitted" as const };
+      const result = await runCodexReview(deps.registry, deps.store, {
+        target,
+        prompt: input.prompt,
+        cwd: input.cwd ?? process.cwd(),
+        model: input.model,
+        effort: input.effort,
+        timeoutMs: input.timeout_ms,
+      });
+      return { ...result, markdown: formatDelegationMarkdown(result) };
+    },
+  );
+
+  server.tool(
+    {
+      name: "antigravity_research",
+      description:
+        "Web research through Antigravity's native google_search + read_url (the real Google index, grounded). Pre-flight checks ~/.gemini/antigravity-cli/settings.json for the read_url allow rule headless runs need: 'check' (default) fails fast with the exact fix, 'fix' adds the rule (timestamped backup), 'skip' runs blind. Returns findings with source URLs.",
+      input: z.object({
+        question: z.string().min(1).describe("The research question, self-contained."),
+        fetch_pages: z
+          .array(z.string())
+          .optional()
+          .describe("Specific URLs to read in full, in addition to search."),
+        subagents: z
+          .boolean()
+          .optional()
+          .describe("Let agy spawn subagents for parallel sub-questions."),
+        preflight: z
+          .enum(["check", "fix", "skip"])
+          .optional()
+          .describe("Permission pre-flight for read_url(*). Default check."),
+        cwd: z.string().optional().describe("Working directory. Defaults to the server cwd."),
+        model: z.string().optional().describe("agy --model slug from occ_models. Unknown slug is a hard ERROR."),
+        effort: z.enum(["low", "medium", "high", "xhigh", "max"]).optional(),
+        timeout_ms: z.number().int().min(1_000).max(1_800_000).optional(),
+      }),
+    },
+    async (input) => {
+      const result = await runAgyResearch(deps.registry, deps.store, {
+        question: input.question,
+        fetchPages: input.fetch_pages,
+        subagents: input.subagents,
+        preflight: input.preflight,
+        cwd: input.cwd ?? process.cwd(),
+        model: input.model,
+        effort: input.effort,
+        timeoutMs: input.timeout_ms,
+      });
+      return { ...result, markdown: formatDelegationMarkdown(result) };
     },
   );
 

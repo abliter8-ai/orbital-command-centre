@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import {
   clampTimeout,
+  lineSplitter,
   resolveCwd,
   summariseOutput,
   validateCwd,
@@ -24,9 +25,24 @@ import {
   type SessionOptions,
 } from "@occ/core";
 import { probeCodexAvailability } from "./availability.js";
-import { parseExecJsonl } from "./parse-exec-jsonl.js";
+import { parseExecJsonl, streamEventFromExecLine } from "./parse-exec-jsonl.js";
 import { runCodexExec } from "./run-exec.js";
-import { DEFAULT_SANDBOX, buildCodexExecArgs, resolveCodexBin } from "./spawn-args.js";
+import {
+  DEFAULT_SANDBOX,
+  buildCodexExecArgs,
+  buildCodexReviewArgs,
+  resolveCodexBin,
+  type CodexReviewTarget,
+} from "./spawn-args.js";
+
+export interface CodexReviewOptions {
+  target: CodexReviewTarget;
+  /** Custom review instructions. */
+  prompt?: string;
+  model?: string;
+  effort?: PromptRequest["effort"];
+  timeoutMs?: number;
+}
 
 const execFileAsync = promisify(execFile);
 
@@ -44,7 +60,7 @@ export class CodexAgentHandle implements AgentHandle {
 
   capabilities(): AgentCapabilities {
     return {
-      streaming: false,
+      streaming: true,
       resume: true,
       cancel: true,
       sandboxModes: ["read-only", "workspace-write", "danger-full-access"],
@@ -70,6 +86,47 @@ export class CodexAgentHandle implements AgentHandle {
   }
 
   async prompt(session: Session, request: PromptRequest): Promise<DelegationResult> {
+    return this.runJob(session, request, (lastMessagePath, cwd) =>
+      buildCodexExecArgs({
+        cwd,
+        brief: request.brief,
+        sandbox: request.sandbox ?? DEFAULT_SANDBOX,
+        model: this.sessionModels.get(session.sessionId),
+        effort: request.effort,
+        resumeSessionId: session.sessionId,
+        images: request.images,
+        lastMessagePath,
+      }),
+    );
+  }
+
+  /**
+   * First-class `codex exec review`. Always read-only. Session model carries
+   * over; review never resumes a thread.
+   */
+  async review(session: Session, opts: CodexReviewOptions): Promise<DelegationResult> {
+    const request: PromptRequest = {
+      brief: opts.prompt ?? "Review the changes.",
+      sandbox: "read-only",
+      effort: opts.effort,
+      timeoutMs: opts.timeoutMs,
+    };
+    return this.runJob(session, request, (lastMessagePath) =>
+      buildCodexReviewArgs({
+        target: opts.target,
+        prompt: opts.prompt,
+        model: opts.model ?? this.sessionModels.get(session.sessionId),
+        effort: opts.effort,
+        lastMessagePath,
+      }),
+    );
+  }
+
+  private async runJob(
+    session: Session,
+    request: PromptRequest,
+    buildArgs: (lastMessagePath: string, cwd: string) => string[],
+  ): Promise<DelegationResult> {
     const started = Date.now();
     const task = this.store.create({
       sessionId: session.sessionId,
@@ -90,21 +147,21 @@ export class CodexAgentHandle implements AgentHandle {
     }
 
     const timeoutMs = clampTimeout(request.timeoutMs);
-    const sandbox = request.sandbox ?? DEFAULT_SANDBOX;
     const tmp = await mkdtemp(join(tmpdir(), "occ-codex-"));
     const lastMessagePath = join(tmp, "last-message.txt");
     const controller = new AbortController();
     this.inflight.set(task.taskId, controller);
 
-    const args = buildCodexExecArgs({
-      cwd: cwdCheck.cwd,
-      brief: request.brief,
-      sandbox,
-      model: this.sessionModels.get(session.sessionId),
-      effort: request.effort,
-      resumeSessionId: session.sessionId,
-      lastMessagePath,
-    });
+    const args = buildArgs(lastMessagePath, cwdCheck.cwd);
+
+    let splitter: ReturnType<typeof lineSplitter> | undefined;
+    if (request.onEvent) {
+      const emit = request.onEvent;
+      splitter = lineSplitter((line) => {
+        const event = streamEventFromExecLine(line);
+        if (event) emit(event);
+      });
+    }
 
     try {
       const ran = await runCodexExec({
@@ -114,7 +171,10 @@ export class CodexAgentHandle implements AgentHandle {
         timeoutMs,
         lastMessagePath,
         signal: controller.signal,
+        onStdoutData: splitter?.push,
       });
+      // Deliver a final event whose line never got a trailing newline.
+      splitter?.flush();
 
       if (ran.spawnError) {
         const result = this.fail(task.taskId, session, request, started, {

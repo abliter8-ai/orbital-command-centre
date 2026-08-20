@@ -132,7 +132,7 @@ Windows (PowerShell):
 pwsh scripts/install.ps1
 ```
 
-The installer checks Node ≥22 / pnpm 10, builds and tests, verifies the underlying coding CLIs against the tested minimum versions (`--upgrade-clis` also runs each CLI's own `update`), registers the `orbital` MCP server with Claude Code, grants the twelve `mcp__orbital__*` tool permissions in `~/.claude/settings.json` (with a timestamped backup), links the `delegating-to-*` and `choosing-the-right-agent` skills into `~/.claude/skills`, appends a short delegation pointer to `~/.claude/CLAUDE.md` (idempotent, `--no-claude-md` / `-NoClaudeMd` opts out), and refreshes the model catalog.
+The installer checks Node ≥22 / pnpm 10, builds and tests, verifies the underlying coding CLIs against the tested minimum versions (`--upgrade-clis` also runs each CLI's own `update`), registers the `orbital` MCP server with Claude Code, grants the fourteen `mcp__orbital__*` tool permissions in `~/.claude/settings.json` (with a timestamped backup), links the `delegating-to-*` and `choosing-the-right-agent` skills into `~/.claude/skills`, appends a short delegation pointer to `~/.claude/CLAUDE.md` (idempotent, `--no-claude-md` / `-NoClaudeMd` opts out), and refreshes the model catalog.
 
 Refresh the per-agent model lists any time with:
 
@@ -153,12 +153,12 @@ Requires Node ≥22, pnpm 10, and the local CLIs you want to delegate to (`codex
 Then:
 
 1. Call `occ_health`. Confirm the target CLI is `available` and `authenticated`. Call `occ_models` to pick a model from the live catalog, and `occ_capabilities` to see which agent owns a native capability (live X, media gen, grounded search, browser).
-2. Call `delegate_to_codex`, `delegate_to_cursor`, `delegate_to_grok`, or `delegate_to_antigravity` with a **self-contained brief**: goal, constraints, files in play, definition of done. Pass `cwd` if the server was not launched in that repo. Use `sandbox: "read-only"` for investigation. For Grok's unique capabilities prefer the first-class tools: `grok_x_search` (live X index — never a read-only delegate, it can hang on tool approval), `grok_imagine` (stills), `grok_video` (animate a still; no text-to-video).
+2. Call `delegate_to_codex`, `delegate_to_cursor`, `delegate_to_grok`, or `delegate_to_antigravity` with a **self-contained brief**: goal, constraints, files in play, definition of done. Pass `cwd` if the server was not launched in that repo. Use `sandbox: "read-only"` for investigation. `delegate_to_codex` also takes `images` (absolute paths — Codex reads them with the prompt). Prefer the first-class tools for native capabilities: `codex_review` (structured review of uncommitted changes, a base branch, a commit, or a custom prompt), `antigravity_research` (grounded web research via `google_search` + `read_url`, with a permission pre-flight — `preflight: "fix"` merges `read_url(*)` into the agy settings, backing up first), `grok_x_search` (live X index — never a read-only delegate, it can hang on tool approval), `grok_imagine` (stills), `grok_video` (animate a still; no text-to-video).
 3. Review the structured result (status, summary, files changed, `sessionId`; `mediaPaths` + `mediaSaved` on the media tools).
 4. To continue the same thread, pass that `sessionId` as `resume_session_id`.
 5. To stop a runaway delegation: `occ_tasks` with `status: ["running"]`, then `occ_cancel` with the `taskId`. Cancellation SIGTERMs the agent's whole process group (grandchildren included), escalating to SIGKILL after a 4s grace.
 
-Codex default write path is `--approve-for-me` (0.148 refuses `--sandbox` together with that flag). Cursor write path is `cursor-agent -p --force --trust` with stream-json; read-only is `--mode ask`. Grok is `grok --no-leader -p --output-format json --verbatim`. Write path adds `--always-approve`. OS `--sandbox` is not passed (hangs grok 1.0.5 headless). OCC never passes `--dangerously-bypass-approvals-and-sandbox`. Spawned Cursor processes set `AGENT_CLI_CREDENTIAL_STORE=file` so a locked macOS login keychain does not fail the CLI. Override binaries with `CODEX_BIN` / `CURSOR_BIN` / `GROK_BIN`. Grok's X search and Imagine are first-class OCC tools; the remaining Grok-native surface (thread fetch, open-web search) and Antigravity's `google_search` / `read_url` / browser stay inside the agent — name them in the brief (`occ_capabilities` lists the whole map). Known limit: on Zero Data Retention Grok accounts, video generation is refused server-side (`output.upload_url` required, not exposed by the CLI) — `grok_video` returns `mediaSaved: false` with the reason in `output`.
+Codex default write path is `--approve-for-me` (0.148 refuses `--sandbox` together with that flag). Cursor write path is `cursor-agent -p --force --trust` with stream-json; read-only is `--mode ask`. Grok is `grok --no-leader -p --output-format json --verbatim`. Write path adds `--always-approve`. OS `--sandbox` is not passed (hangs grok 1.0.5 headless). OCC never passes `--dangerously-bypass-approvals-and-sandbox`. Spawned Cursor processes set `AGENT_CLI_CREDENTIAL_STORE=file` so a locked macOS login keychain does not fail the CLI. Override binaries with `CODEX_BIN` / `CURSOR_BIN` / `GROK_BIN`. Grok's X search and Imagine are first-class OCC tools, as are Codex review/image input and Antigravity web research; the remaining native surface (Grok thread fetch and open-web search, Antigravity's browser) stays inside the agent — name it in the brief (`occ_capabilities` lists the whole map). Known limit: on Zero Data Retention Grok accounts, video generation is refused server-side (`output.upload_url` required, not exposed by the CLI) — `grok_video` returns `mediaSaved: false` with the reason in `output`.
 
 ---
 
@@ -178,11 +178,11 @@ Codex default write path is `--approve-for-me` (0.148 refuses `--sandbox` togeth
 }
 ```
 
-`initialize` / `session/new` / `session/prompt` / `session/cancel` are implemented; ACP session modes map onto OCC sandboxes (`read-only`, `workspace-write`, `danger-full-access` — default `workspace-write`). Per-session model override via `_meta.model` on `session/new`, or `OCC_ACP_MODEL`. Handles are non-streaming, so a turn shows a pending tool call while the delegation runs and lands as one message chunk; `stopReason` maps `succeeded → end_turn`, `cancelled → cancelled`, `failed → refusal`.
+`initialize` / `session/new` / `session/prompt` / `session/cancel` are implemented; ACP session modes map onto OCC sandboxes (`read-only`, `workspace-write`, `danger-full-access` — default `workspace-write`). Per-session model override via `_meta.model` on `session/new`, or `OCC_ACP_MODEL`. Streaming handles (Codex, Cursor) report live progress: tool calls appear as `tool_call` updates as they run and assistant text lands as `agent_message_chunk`s the moment the CLI emits it; buffered handles (Grok, Antigravity) deliver one chunk at turn end. `stopReason` maps `succeeded → end_turn`, `cancelled → cancelled`, `failed → refusal`.
 
 ## A2A surface (agents)
 
-`occ-a2a --agent grok --port 7003` serves one agent over HTTP/JSON-RPC (v1.0 methods: `SendMessage`, `GetTask`, `CancelTask`; streaming is not advertised). The agent card lives at `/.well-known/agent-card.json`; skills are generated from the same capability profile `occ_capabilities` serves. Brief goes in text parts; `cwd` / `sandbox` / `model` / `effort` ride in message metadata. Results come back as a `result` artifact; `CancelTask` kills the underlying process group.
+`occ-a2a --agent grok --port 7003` serves one agent over HTTP/JSON-RPC (v1.0 methods: `SendMessage`, `SendStreamingMessage`, `GetTask`, `CancelTask`). The agent card lives at `/.well-known/agent-card.json` and advertises `streaming: true`; skills are generated from the same capability profile `occ_capabilities` serves. Brief goes in text parts; `cwd` / `sandbox` / `model` / `effort` ride in message metadata. `SendStreamingMessage` answers with SSE: streaming handles (Codex, Cursor) publish text as appended `artifactUpdate` chunks and tool activity as working-status updates while the run is live; buffered handles deliver their artifact at the end. `CancelTask` kills the underlying process group.
 
 ## Control plane (`orbital`)
 
@@ -196,10 +196,11 @@ node packages/control-plane/dist/cli.js down
 The daemon hosts all four agents' A2A endpoints under one port (`/agents/<id>` + per-agent cards), and adds what the raw transports don't:
 
 - **Registry** — `GET /v1/registry`: live availability, catalog models, and the capability map per agent.
-- **Policy** — `~/.occ/orbital.json` per agent: `enabled`, `maxSandbox` (default caps everything at `workspace-write`; `danger-full-access` needs explicit opt-in), `defaultModel`. Over-cap or disabled-agent requests are rejected before any process spawns.
-- **Audit** — every mediated delegation appended to `~/.occ/audit.jsonl` (agent, sandbox, model, status, duration), readable at `GET /v1/audit` or `orbital audit`.
+- **Policy** — `~/.occ/orbital.json` per agent: `enabled`, `maxSandbox` (default caps everything at `workspace-write`; `danger-full-access` needs explicit opt-in), `defaultModel`, `isolation`. Over-cap or disabled-agent requests are rejected before any process spawns.
+- **Worktree isolation** — `isolation: "worktree"` runs every delegation for that agent in a fresh `git worktree` detached at HEAD (under `~/.occ/worktrees`), removed when the task ends. The caller's working tree is never touched; uncommitted changes are invisible to the agent by construction. Stale worktrees from a crashed daemon are swept at startup. Requires the delegation `cwd` to be a git repo (non-repo cwd fails fast with `invalid_cwd`).
+- **Audit** — every mediated delegation appended to `~/.occ/audit.jsonl` (agent, sandbox, model, status, duration), plus worktree lifecycle events, readable at `GET /v1/audit` or `orbital audit`.
 
-Multi-tenant hosting note: one daemon port serves all agents under `/agents/<id>/` prefixes rather than one port per agent; cards are rewritten from the request `Host` so they stay correct behind proxies. Worktree isolation is the documented follow-on (see roadmap).
+Multi-tenant hosting note: one daemon port serves all agents under `/agents/<id>/` prefixes rather than one port per agent; cards are rewritten from the request `Host` so they stay correct behind proxies.
 
 ## Package layout (now)
 
@@ -222,7 +223,7 @@ scripts/
   update-models.ps1     # Windows twin
 ```
 
-Still planned: worktree isolation in the control plane, streaming handles, more adapters.
+Still planned: more adapters.
 
 ---
 
@@ -249,13 +250,14 @@ Same agents remain available to any ACP client or A2A peer.
 - [x] Live model catalog (`occ_models` + auto-refresh) and `occ_tasks` / `occ_cancel`
 - [x] Process-tree kill on timeout/cancel; install + update-models scripts
 - [x] Native-tool surfacing: `occ_capabilities` + first-class `grok_x_search` / `grok_imagine` / `grok_video`
-- [ ] First-class `codex review` and Codex image input; Antigravity research tool with permission pre-flight
+- [x] First-class `codex review` and Codex image input; Antigravity research tool with permission pre-flight
 - [x] ACP server surface on the same handles (`occ-acp`, stdio, session modes → sandboxes)
 - [x] A2A server surface on the same handles (`occ-a2a`, HTTP/JSON-RPC, per-agent cards)
 - [x] Control-plane daemon (`orbital`: registry, policy mediation, audit log, lifecycle)
-- [ ] Worktree isolation per delegation in the control plane
-- [ ] Streaming handles (ACP chunks / A2A SSE) once an adapter produces incremental output
-- [ ] Polish, docs, and more adapters
+- [x] Worktree isolation per delegation in the control plane
+- [x] Streaming handles (ACP chunks / A2A SSE) once an adapter produces incremental output
+- [x] Polish + docs
+- [ ] More adapters (standing track — next candidate when a fifth CLI is installed)
 
 ---
 

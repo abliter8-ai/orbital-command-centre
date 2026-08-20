@@ -22,10 +22,13 @@ actually usable right now.
 | Live X posts, threads, engagement | Grok | `grok_x_search` (thread fetch: `delegate_to_grok`) |
 | Image generation / edit | Grok | `grok_imagine` |
 | Short video from a still | Grok | `grok_video` (stage the still first) |
-| Open-web search / fetch a page | Grok or Antigravity | `delegate_to_grok` (name `web_search`) or `delegate_to_antigravity` (name `google_search` / `read_url`) |
+| Grounded web research (search + fetch) | Antigravity | `antigravity_research` (`preflight: "fix"` grants `read_url(*)` once) |
+| Open-web search, quick | Grok | `delegate_to_grok` (name `web_search`) |
 | Browser automation (click/type/DOM) | Antigravity | `delegate_to_antigravity`, pre-allowed `execute_url` or danger-full-access |
+| Code review of a diff / branch / commit | Codex | `codex_review` (never the agent that wrote the diff) |
 | Hard / ambiguous implementation | Codex | `delegate_to_codex` (`gpt-5.6-sol`, high effort) |
 | Everyday implementation, tests, refactors | Codex or Cursor | `delegate_to_codex` (terra) / `delegate_to_cursor` |
+| Show the agent a screenshot / mock / diagram | Codex | `delegate_to_codex` with `images: [abs paths]` |
 | Read-only repo Q&A / plan | Cursor or Codex | `sandbox: "read-only"` (Cursor `--mode ask` is cheapest) |
 | A specific model by name (200+ catalog) | Cursor | `delegate_to_cursor` + slug from `occ_models` |
 | Architecture, security review, final judgment | **Claude itself** | do not delegate |
@@ -38,11 +41,13 @@ actually usable right now.
    failed turn. `occ_health` first when in doubt.
 3. **One agent owns the diff.** Never let two agents write the same tree in
    parallel; sequence them (implement → review) instead.
-4. **Review stays home.** Agents implement and fetch; Claude decides. Do not
-   delegate the review of a diff to the agent that wrote it.
+4. **Review stays home — or crosses over.** Claude keeps final judgment. A
+   second opinion goes to `codex_review`, and never to the agent that wrote
+   the diff.
 5. **Native tools need their flags.** Grok X/Imagine hang under `read-only`
    (use the first-class tools); agy web tools soft-deny without allow-rules
-   (see `delegating-to-antigravity`).
+   (`antigravity_research` pre-flights this — `"fix"` merges the rule with a
+   backup).
 
 ## When two agents qualify
 
