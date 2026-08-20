@@ -210,7 +210,14 @@ Cursor then sees `delegate_to_claude` (plus the other four delegates and the nat
 
 ## A2A surface (agents)
 
-`occ-a2a --agent grok --port 7003` serves one agent over HTTP/JSON-RPC (v1.0 methods: `SendMessage`, `SendStreamingMessage`, `GetTask`, `CancelTask`). The agent card lives at `/.well-known/agent-card.json` and advertises `streaming: true`; skills are generated from the same capability profile `occ_capabilities` serves. Brief goes in text parts; `cwd` / `sandbox` / `model` / `effort` ride in message metadata. `SendStreamingMessage` answers with SSE: streaming handles (Codex, Cursor, Claude) publish text as appended `artifactUpdate` chunks and tool activity as working-status updates while the run is live; buffered handles deliver their artifact at the end. `CancelTask` kills the underlying process group.
+`occ-a2a --agent grok --port 7003` serves one agent over HTTP/JSON-RPC (v1.0 methods: `SendMessage`, `SendStreamingMessage`, `GetTask`, `ListTasks`, `CancelTask`, `SubscribeToTask`). The agent card lives at `/.well-known/agent-card.json` and advertises `streaming: true`; skills are generated from the same capability profile `occ_capabilities` serves. Brief goes in text parts; `cwd` / `sandbox` / `model` / `effort` ride in **message** metadata (`params.message.metadata`, not `params.metadata`). `SendStreamingMessage` answers with SSE: streaming handles (Codex, Cursor, Claude) publish text as appended `artifactUpdate` chunks and tool activity as working-status updates while the run is live; buffered handles deliver their artifact at the end. `CancelTask` kills the underlying process group.
+
+**Long tasks and re-attachment.** Tasks are server-side state: once a run starts it survives its client. A blocking `SendMessage` client that disconnects mid-run does not lose the work — the task runs to completion and the result is retrievable. Two patterns, in order of robustness:
+
+1. **Prefer `SendStreamingMessage` for anything that might run long.** The first SSE frame carries the full task object, so you learn the `taskId` at t=0. If the stream drops, resume with `SubscribeToTask` (live frames) or poll `GetTask`.
+2. **Blocking `SendMessage`:** if the connection dies before the response, rediscover the task with `ListTasks` (sorted by recency; filter by `contextId`/`status`, pass `includeArtifacts: true` for results) and fetch it with `GetTask`.
+
+Two `@a2a-js/sdk` wire quirks are normalized server-side so spec-conformant clients behave: `ListTasks` without a `status` filter would never match anything (the SDK decodes an absent filter as `TASK_STATE_UNSPECIFIED` and then filters on it), and message roles sent as `"user"`/`"agent"` would land in history as `UNRECOGNIZED` (the SDK expects `ROLE_USER`/`ROLE_AGENT`). Both are fixed at the transport boundary. Tasks are held in memory — a server restart clears them (the daemon's audit log survives as the durable record).
 
 ## Control plane (`orbital`)
 

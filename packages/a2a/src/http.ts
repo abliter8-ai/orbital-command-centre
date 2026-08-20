@@ -1,5 +1,5 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import type { AgentCard } from "@a2a-js/sdk";
+import { TaskState, type AgentCard } from "@a2a-js/sdk";
 import {
   DefaultRequestHandler,
   InMemoryTaskStore,
@@ -7,6 +7,10 @@ import {
   ServerCallContext,
   type AgentExecutor,
 } from "@a2a-js/sdk/server";
+import type {
+  ListTasksRequest,
+  ListTasksResponse,
+} from "@a2a-js/sdk";
 
 export interface A2aHttpOptions {
   card: AgentCard;
@@ -28,6 +32,44 @@ async function readBody(req: IncomingMessage): Promise<string> {
 export type AgentRpcHandler = (body: string) => Promise<unknown>;
 
 /**
+ * Works around an @a2a-js/sdk interop bug: ListTasksRequest.fromJSON maps an
+ * absent `status` filter to TASK_STATE_UNSPECIFIED (0), and the stock store's
+ * list() then filters every real task out (`status !== undefined`), so
+ * ListTasks with no status filter could never return anything. Treat
+ * UNSPECIFIED as "no filter" — an explicit UNSPECIFIED filter is meaningless.
+ */
+class NormalizedTaskStore extends InMemoryTaskStore {
+  override async list(params: ListTasksRequest, context: ServerCallContext): Promise<ListTasksResponse> {
+    const normalized =
+      params.status === TaskState.TASK_STATE_UNSPECIFIED
+        ? ({ ...params, status: undefined } as unknown as ListTasksRequest)
+        : params;
+    return super.list(normalized, context);
+  }
+}
+
+/**
+ * The spec's JSON convention is "user"/"agent" for message roles, but the
+ * SDK's proto parser only accepts "ROLE_USER"/"ROLE_AGENT" and silently maps
+ * anything else to UNRECOGNIZED. Normalize inbound roles so spec-conformant
+ * clients get clean history semantics.
+ */
+function normalizeRequestBody(body: string): string {
+  let parsed: { method?: string; params?: { message?: { role?: unknown } } };
+  try {
+    parsed = JSON.parse(body) as typeof parsed;
+  } catch {
+    return body;
+  }
+  const message = parsed?.params?.message;
+  if (!message || typeof message.role !== "string") return body;
+  const role = message.role.toLowerCase();
+  if (role !== "user" && role !== "agent") return body;
+  message.role = `ROLE_${role.toUpperCase()}`;
+  return JSON.stringify(parsed);
+}
+
+/**
  * The JSON-RPC core of one agent, for hosts that do their own HTTP routing
  * (the control-plane daemon mounts one of these per agent). Streaming methods
  * (message/stream) resolve to an AsyncGenerator — hosts must write it with
@@ -36,11 +78,12 @@ export type AgentRpcHandler = (body: string) => Promise<unknown>;
 export function createAgentRpcHandler(options: A2aHttpOptions): AgentRpcHandler {
   const requestHandler = new DefaultRequestHandler(
     options.card,
-    new InMemoryTaskStore(),
+    new NormalizedTaskStore(),
     options.executor,
   );
   const transport = new JsonRpcTransportHandler(requestHandler);
-  return (body: string) => transport.handle(body, new ServerCallContext()) as Promise<unknown>;
+  return (body: string) =>
+    transport.handle(normalizeRequestBody(body), new ServerCallContext()) as Promise<unknown>;
 }
 
 function isAsyncGenerator(value: unknown): value is AsyncGenerator<unknown> {

@@ -135,4 +135,116 @@ describe("A2A HTTP hosting", () => {
     expect(firstChunk).toBeGreaterThanOrEqual(0);
     expect(terminal).toBeGreaterThan(firstChunk);
   });
+
+  it("ListTasks discovers tasks without a status filter (SDK UNSPECIFIED-filter bug)", async () => {
+    const base = await startTestServer();
+    const rpc = async (method: string, params: unknown, id = 1): Promise<Record<string, unknown>> => {
+      const res = await fetch(`${base}/rpc`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id, method, params }),
+      });
+      return (await res.json()) as Record<string, unknown>;
+    };
+
+    await rpc("SendMessage", {
+      message: { messageId: newTaskId(), role: "user", parts: [{ text: "hi" }] },
+    });
+
+    const listed = (await rpc("ListTasks", { includeArtifacts: true }, 2)) as {
+      result?: { tasks?: Array<{ id: string; status?: { state?: string }; artifacts?: unknown[] }> };
+    };
+    expect(listed.result?.tasks?.length).toBe(1);
+    const task = listed.result?.tasks?.[0];
+    expect(task?.status?.state).toBe("TASK_STATE_COMPLETED");
+    expect(task?.artifacts?.length).toBe(1);
+
+    // A status filter that matches still works; one that doesn't returns empty.
+    const match = (await rpc("ListTasks", { status: "TASK_STATE_COMPLETED" }, 3)) as {
+      result?: { tasks?: unknown[] };
+    };
+    expect(match.result?.tasks?.length).toBe(1);
+    const noMatch = (await rpc("ListTasks", { status: "TASK_STATE_FAILED" }, 4)) as {
+      result?: { tasks?: unknown[] };
+    };
+    expect(noMatch.result?.tasks?.length ?? 0).toBe(0);
+  });
+
+  it("re-attaches with GetTask after the SendMessage client disconnects", async () => {
+    // Slow handle: stays in-flight while the client drops.
+    class SlowFake extends FakeAgentHandle {
+      override async prompt(session: Session, request: PromptRequest): Promise<DelegationResult> {
+        this.prompts.push({ session, request });
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        return { ...this.canned, sessionId: session.sessionId, cwd: session.cwd };
+      }
+    }
+    const handle = new SlowFake({ output: "late result", summary: "done" });
+    const store = new InMemoryTaskStore();
+    const card = buildAgentCard("codex", "http://127.0.0.1");
+    server = createA2aHttpServer({ card, executor: new OccAgentExecutor({ handle, store }) });
+    await new Promise<void>((resolve) => server?.listen(0, "127.0.0.1", resolve));
+    const address = server.address();
+    if (address === null || typeof address === "string") throw new Error("no address");
+    const base = `http://127.0.0.1:${address.port}`;
+
+    // Client aborts mid-run — the server keeps executing.
+    const controller = new AbortController();
+    const inflight = fetch(`${base}/rpc`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "SendMessage",
+        params: { message: { messageId: newTaskId(), role: "user", parts: [{ text: "slow" }] } },
+      }),
+      signal: controller.signal,
+    }).catch(() => undefined);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    controller.abort();
+    await inflight;
+
+    // Discover the task via ListTasks (no id known — the response never arrived).
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    const listRes = await fetch(`${base}/rpc`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "ListTasks", params: { includeArtifacts: true } }),
+    });
+    const listed = (await listRes.json()) as {
+      result?: { tasks?: Array<{ id: string; status?: { state?: string } }> };
+    };
+    expect(listed.result?.tasks?.length).toBe(1);
+    const taskId = listed.result?.tasks?.[0]?.id ?? "";
+
+    const getRes = await fetch(`${base}/rpc`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 3, method: "GetTask", params: { id: taskId } }),
+    });
+    const got = (await getRes.json()) as {
+      result?: { status?: { state?: string }; artifacts?: Array<{ parts?: Array<{ text?: string }> }> };
+    };
+    expect(got.result?.status?.state).toBe("TASK_STATE_COMPLETED");
+    expect(got.result?.artifacts?.[0]?.parts?.[0]?.text).toBe("late result");
+  });
+
+  it("normalizes spec-style message roles so history keeps ROLE_USER", async () => {
+    const base = await startTestServer();
+    const res = await fetch(`${base}/rpc`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "SendMessage",
+        params: { message: { messageId: newTaskId(), role: "user", parts: [{ text: "hi" }] } },
+      }),
+    });
+    const body = (await res.json()) as {
+      result?: { task?: { history?: Array<{ role?: string }> } };
+    };
+    expect(body.result?.task?.history?.[0]?.role).toBe("ROLE_USER");
+  });
 });
